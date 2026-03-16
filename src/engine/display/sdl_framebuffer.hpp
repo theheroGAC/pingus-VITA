@@ -19,8 +19,11 @@ namespace pingus {
 class SDLFramebuffer : public Framebuffer
 {
 private:
-  SDL_Surface* screen;          // physical display surface
-  SDL_Surface* logical_surface; // 800x600 offscreen render target
+  SDL_Window*  m_window;          // physical window
+  SDL_Surface* m_screen;          // window surface (owned by SDL, do not free)
+  SDL_Surface* m_logical_surface; // 800x600 offscreen render target (we own this)
+  bool m_fullscreen;
+  bool m_resizable;
   std::vector<SDL_Rect> cliprect_stack;
 
 public:
@@ -47,6 +50,9 @@ public:
   void fill_rect(const Rect& rect, Color color);
 
   Size get_size() const;
+
+  SDL_Window*  get_window()      const override { return m_window; }
+  SDL_Surface* get_sdl_surface() const override { return m_logical_surface; }
 
 private:
   SDLFramebuffer (const SDLFramebuffer&);

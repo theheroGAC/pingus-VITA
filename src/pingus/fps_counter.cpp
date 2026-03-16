@@ -11,7 +11,7 @@
 
 #include "pingus/fps_counter.hpp"
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 #include <sstream>
 
 #include "engine/display/display.hpp"

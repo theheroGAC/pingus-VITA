@@ -12,7 +12,7 @@
 #ifndef HEADER_PINGUS_ENGINE_DISPLAY_SCREENSHOT_HPP
 #define HEADER_PINGUS_ENGINE_DISPLAY_SCREENSHOT_HPP
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 
 #include <string>
 

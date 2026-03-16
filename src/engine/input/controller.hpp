@@ -63,7 +63,7 @@ public:
   void add_button_event(int id, ButtonState state);
   void add_pointer_event(int id, float x, float y);
   void add_scroller_event(int id, float xrel, float yrel);
-  void add_keyboard_event(const SDL_KeyboardEvent& ev);
+  void add_keyboard_event(const SDL_KeyboardEvent& ev, uint32_t unicode = 0);
 
   void add_axis(int id, std::unique_ptr<ControllerAxis> axis);
   void add_button(int id, std::unique_ptr<ControllerButton> button);

@@ -102,10 +102,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 # Find required packages
 find_package(PkgConfig REQUIRED)
 
-# SDL and related libraries
-pkg_check_modules(SDL REQUIRED sdl)
-pkg_check_modules(SDL_IMAGE REQUIRED SDL_image)
-pkg_check_modules(SDL_MIXER REQUIRED SDL_mixer)
+# SDL2 and related libraries
+pkg_check_modules(SDL2 REQUIRED sdl2)
+pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
+pkg_check_modules(SDL2_MIXER REQUIRED SDL2_mixer)
 pkg_check_modules(PNG REQUIRED libpng)
 
 # Wii Specific Libraries
@@ -258,9 +258,9 @@ endif()
 include_directories(
     ${CMAKE_BINARY_DIR}  # For config.h
     ${CMAKE_SOURCE_DIR}/src
-    ${SDL_INCLUDE_DIRS}
-    ${SDL_IMAGE_INCLUDE_DIRS}
-    ${SDL_MIXER_INCLUDE_DIRS}
+    ${SDL2_INCLUDE_DIRS}
+    ${SDL2_IMAGE_INCLUDE_DIRS}
+    ${SDL2_MIXER_INCLUDE_DIRS}
     ${PNG_INCLUDE_DIRS}
 )
 
@@ -329,9 +329,9 @@ set_target_properties(libpingus PROPERTIES OUTPUT_NAME pingus)
 
 # Link libraries for libpingus
 target_link_libraries(libpingus
-    ${SDL_LIBRARIES}
-    ${SDL_IMAGE_LIBRARIES}
-    ${SDL_MIXER_LIBRARIES}
+    ${SDL2_LIBRARIES}
+    ${SDL2_IMAGE_LIBRARIES}
+    ${SDL2_MIXER_LIBRARIES}
     ${PNG_LIBRARIES}
 )
 
@@ -371,6 +371,14 @@ endif()
 # Main executable
 add_executable(pingus src/main.cpp)
 target_link_libraries(pingus libpingus)
+
+# Generate a linker map file for Wii builds.
+# When the Wii exception screen shows a crash address, search pingus.map for
+# the nearest address <= that value to identify the function.  The map file
+# stays in the build directory and is not distributed.
+if(WII_BUILD)
+    target_link_options(pingus PRIVATE -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/pingus.map)
+endif()
 
 # Post-Build Steps and Distribution Directory Creation
 if(WII_BUILD)

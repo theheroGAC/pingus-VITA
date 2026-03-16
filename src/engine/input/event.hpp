@@ -15,8 +15,8 @@
 #include <string>
 #include <vector>
 
-#include <SDL_keyboard.h>
-#include <SDL_events.h>
+#include <SDL2/SDL_keyboard.h>
+#include <SDL2/SDL_events.h>
 
 namespace pingus::input {
 
@@ -92,8 +92,9 @@ struct ScrollEvent
 
 struct KeyboardEvent
 {
-  bool state;
-  SDL_keysym keysym;
+  bool       state;
+  SDL_Keysym keysym;
+  uint32_t   unicode;
 };
 
 struct Event
@@ -157,13 +158,29 @@ inline Event makeScrollerEvent(EventName name, float x_delta, float y_delta)
   return event;
 }
 
+// Build a KeyboardEvent from SDL_KEYDOWN/SDL_KEYUP.
+// unicode is 0 here; filled in separately from SDL_TEXTINPUT.
 inline Event makeKeyboardEvent(const SDL_KeyboardEvent& ev)
 {
   Event event;
 
-  event.type = KEYBOARD_EVENT_TYPE;
-  event.keyboard.state  = ev.state;
-  event.keyboard.keysym = ev.keysym;
+  event.type             = KEYBOARD_EVENT_TYPE;
+  event.keyboard.state   = (ev.state == SDL_PRESSED);
+  event.keyboard.keysym  = ev.keysym;
+  event.keyboard.unicode = 0;
+
+  return event;
+}
+
+// Build a keyboard event carrying only a Unicode codepoint (from SDL_TEXTINPUT).
+inline Event makeTextInputEvent(uint32_t codepoint)
+{
+  Event event;
+
+  event.type             = KEYBOARD_EVENT_TYPE;
+  event.keyboard.state   = true;
+  event.keyboard.keysym  = {};
+  event.keyboard.unicode = codepoint;
 
   return event;
 }

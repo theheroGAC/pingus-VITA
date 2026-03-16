@@ -12,7 +12,7 @@
 #ifndef HEADER_PINGUS_ENGINE_SOUND_SOUND_REAL_HPP
 #define HEADER_PINGUS_ENGINE_SOUND_SOUND_REAL_HPP
 
-#include <SDL_mixer.h>
+#include <SDL2/SDL_mixer.h>
 #include <string_view>
 
 #include "engine/sound/sound_impl.hpp"

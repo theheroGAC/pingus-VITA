@@ -250,9 +250,10 @@ GroundMap::put_alpha_surface(Surface provider, Surface sprovider,
       }
     }
   }
-  else if (sprovider.get_surface()->flags & SDL_SRCCOLORKEY)
+  else if ([&]{ Uint32 ck = 0; return SDL_GetColorKey(sprovider.get_surface(), &ck) == 0; }())
   {
-    Uint32 colorkey = sprovider.get_surface()->format->colorkey;
+    Uint32 colorkey = 0;
+    SDL_GetColorKey(sprovider.get_surface(), &colorkey);
 
     for (int y = start_y; y < end_y; ++y)
     {

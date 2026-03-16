@@ -21,10 +21,12 @@
 #    include <GL/glu.h>
 #    include <GL/glext.h>
 #  else
-#    include <SDL_opengl.h>
+#    include <SDL2/SDL_opengl.h>
 #  endif
 #endif
 
+#include "engine/display/display.hpp"
+#include "engine/display/framebuffer.hpp"
 #include "util/log.hpp"
 #include "util/system.hpp"
 
@@ -38,9 +40,37 @@ Screenshot::make_screenshot()
 {
   std::string filename = get_filename();
   log_info("Screenshot: Saving screenshot to: {}", filename);
-  save(SDL_GetVideoSurface(), filename);
-  log_info("Screenshot: Screenshot is done.");
 
+  Framebuffer* fb = Display::get_framebuffer();
+
+#ifdef HAVE_OPENGL
+  // If the framebuffer has an SDL_Window with an active GL context, read via GL
+  SDL_Window* win = fb ? fb->get_window() : nullptr;
+  if (win && (SDL_GetWindowFlags(win) & SDL_WINDOW_OPENGL))
+  {
+    int w, h;
+    SDL_GetWindowSize(win, &w, &h);
+    std::unique_ptr<uint8_t[]> buffer(new uint8_t[w * h * 3]);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, buffer.get());
+    save_png(filename, buffer.get(), w, h, true /* flip vertically */);
+    log_info("Screenshot: Screenshot is done.");
+    return filename;
+  }
+#endif
+
+  // SDL software framebuffer path
+  SDL_Surface* surface = fb ? fb->get_sdl_surface() : nullptr;
+  if (surface)
+  {
+    save(surface, filename);
+  }
+  else
+  {
+    log_error("Screenshot: no surface available for screenshot");
+  }
+
+  log_info("Screenshot: Screenshot is done.");
   return filename;
 }
 
@@ -49,71 +79,60 @@ Screenshot::save(SDL_Surface* surface, const std::string& filename)
 {
   std::unique_ptr<uint8_t[]> buffer(new uint8_t[surface->w * surface->h * 3]);
 
-#ifdef HAVE_OPENGL
-  if(surface->flags & SDL_OPENGL)
-  {
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, surface->w, surface->h, GL_RGB, GL_UNSIGNED_BYTE, buffer.get());
-    save_png(filename, buffer.get(), surface->w, surface->h, true);
-  }
-  else
-#endif
-  {
-    SDL_LockSurface(surface);
+  SDL_LockSurface(surface);
 
-    switch(surface->format->BitsPerPixel)
+  switch(surface->format->BitsPerPixel)
+  {
+    case 16: // 16bit
     {
-      case 16: // 16bit
-      {
-        uint8_t* pixels = static_cast<uint8_t*>(surface->pixels);
-        for (int y = 0; y < surface->h; ++y)
-          for (int x = 0; x < surface->w; ++x)
-          {
-            int i = (y * surface->w + x);
-            SDL_GetRGB(*(reinterpret_cast<uint16_t*>(pixels + y * surface->pitch + x*2)),
-                       surface->format,
-                       buffer.get() + i*3 + 0, buffer.get() + i*3 + 1, buffer.get() + i*3 + 2);
-          }
-        break;
-      }
-
-      case 24: // 24bit
-      {
-        uint8_t* pixels = static_cast<uint8_t*>(surface->pixels);
-        for (int y = 0; y < surface->h; ++y)
-          for (int x = 0; x < surface->w; ++x)
-          {
-            int i = (y * surface->w + x);
-            SDL_GetRGB(*(reinterpret_cast<uint32_t*>(pixels + y * surface->pitch + x*3)),
-                       surface->format,
-                       buffer.get() + i*3 + 0, buffer.get() + i*3 + 1, buffer.get() + i*3 + 2);
-          }
-        break;
-      }
-
-      case 32: // 32bit
-      {
-        uint8_t* pixels = static_cast<uint8_t*>(surface->pixels);
-        for (int y = 0; y < surface->h; ++y)
-          for (int x = 0; x < surface->w; ++x)
-          {
-            int i = (y * surface->w + x);
-            SDL_GetRGB(*(reinterpret_cast<uint32_t*>(pixels + y * surface->pitch + x*4)),
-                       surface->format,
-                       buffer.get() + i*3 + 0, buffer.get() + i*3 + 1, buffer.get() + i*3 + 2);
-          }
-        break;
-      }
-      default:
-        log_info("BitsPerPixel: {}", int(surface->format->BitsPerPixel));
-        assert(!"Unknown color format");
-        break;
+      uint8_t* pixels = static_cast<uint8_t*>(surface->pixels);
+      for (int y = 0; y < surface->h; ++y)
+        for (int x = 0; x < surface->w; ++x)
+        {
+          int i = (y * surface->w + x);
+          SDL_GetRGB(*(reinterpret_cast<uint16_t*>(pixels + y * surface->pitch + x*2)),
+                     surface->format,
+                     buffer.get() + i*3 + 0, buffer.get() + i*3 + 1, buffer.get() + i*3 + 2);
+        }
+      break;
     }
 
-    save_png(filename, buffer.get(), surface->w, surface->h);
+    case 24: // 24bit
+    {
+      uint8_t* pixels = static_cast<uint8_t*>(surface->pixels);
+      for (int y = 0; y < surface->h; ++y)
+        for (int x = 0; x < surface->w; ++x)
+        {
+          int i = (y * surface->w + x);
+          SDL_GetRGB(*(reinterpret_cast<uint32_t*>(pixels + y * surface->pitch + x*3)),
+                     surface->format,
+                     buffer.get() + i*3 + 0, buffer.get() + i*3 + 1, buffer.get() + i*3 + 2);
+        }
+      break;
+    }
 
-    SDL_UnlockSurface(surface);
+    case 32: // 32bit
+    {
+      uint8_t* pixels = static_cast<uint8_t*>(surface->pixels);
+      for (int y = 0; y < surface->h; ++y)
+        for (int x = 0; x < surface->w; ++x)
+        {
+          int i = (y * surface->w + x);
+          SDL_GetRGB(*(reinterpret_cast<uint32_t*>(pixels + y * surface->pitch + x*4)),
+                     surface->format,
+                     buffer.get() + i*3 + 0, buffer.get() + i*3 + 1, buffer.get() + i*3 + 2);
+        }
+      break;
+    }
+    default:
+    log_info("BitsPerPixel: {}", int(surface->format->BitsPerPixel));
+    assert(!"Unknown color format");
+    break;
   }
+
+  save_png(filename, buffer.get(), surface->w, surface->h);
+
+  SDL_UnlockSurface(surface);
 }
 
 void

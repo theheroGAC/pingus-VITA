@@ -136,7 +136,11 @@ Playfield::update(float delta)
     }
   }
 
-  if (globals::auto_scrolling && (Display::is_fullscreen() || SDL_WM_GrabInput(SDL_GRAB_QUERY) == SDL_GRAB_ON))
+  if (globals::auto_scrolling && (Display::is_fullscreen()
+#ifndef __WII__
+      || SDL_GetRelativeMouseMode() == SDL_TRUE
+#endif
+     ))
   {
     scroll_speed = static_cast<int>(800 * delta);
 
@@ -232,8 +236,8 @@ Playfield::on_pointer_move (int x, int y)
 
   if (globals::developer_mode)
   { // Some fun stuff that lets you draw directly on the level
-    Uint8 *keystate = SDL_GetKeyState(NULL);
-    if (keystate[SDLK_DELETE])
+    const Uint8 *keystate = SDL_GetKeyboardState(NULL);
+    if (keystate[SDL_SCANCODE_DELETE])
     {
       CollisionMask mask("other/bash_radius_gfx");
       Vector2i p = state.screen2world(mouse_pos);

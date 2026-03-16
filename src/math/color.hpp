@@ -12,7 +12,7 @@
 #ifndef HEADER_PINGUS_MATH_COLOR_HPP
 #define HEADER_PINGUS_MATH_COLOR_HPP
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 
 namespace pingus {
 

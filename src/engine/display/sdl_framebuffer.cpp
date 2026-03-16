@@ -122,9 +122,9 @@ SDL_Rect Intersection(SDL_Rect* r1, SDL_Rect* r2)
   rect.x = std::max(r1->x, r2->x);
   rect.y = std::max(r1->y, r2->y);
   int endx = std::min(r1->x + r1->w, r2->x + r2->w);
-  rect.w = static_cast<Uint16>(std::max(static_cast<int>(endx - rect.x), 0));
+  rect.w = std::max(endx - rect.x, 0);
   int endy = std::min(r1->y + r1->h, r2->y + r2->h);
-  rect.h = static_cast<Uint16>(std::max(static_cast<int>(endy - rect.y), 0));
+  rect.h = std::max(endy - rect.y, 0);
   return rect;
 }
 
@@ -140,14 +140,28 @@ void clip(int& i, int min, int max)
 
 
 SDLFramebuffer::SDLFramebuffer() :
-  screen(nullptr),
-  logical_surface(nullptr),
+  m_window(nullptr),
+  m_screen(nullptr),
+  m_logical_surface(nullptr),
+  m_fullscreen(false),
+  m_resizable(false),
   cliprect_stack()
 {
 }
 
 SDLFramebuffer::~SDLFramebuffer()
 {
+  if (m_logical_surface)
+  {
+    SDL_FreeSurface(m_logical_surface);
+    m_logical_surface = nullptr;
+  }
+  // m_screen is owned by SDL (SDL_GetWindowSurface), do not free it
+  if (m_window)
+  {
+    SDL_DestroyWindow(m_window);
+    m_window = nullptr;
+  }
 }
 
 FramebufferSurface
@@ -163,12 +177,12 @@ SDLFramebuffer::draw_surface(const FramebufferSurface& surface, Vector2i pos)
   SDL_Surface* src = impl->get_surface();
 
   SDL_Rect dstrect;
-  dstrect.x = static_cast<Sint16>(pos.x);
-  dstrect.y = static_cast<Sint16>(pos.y);
-  dstrect.w = 0;
-  dstrect.h = 0;
+  dstrect.x = pos.x;
+  dstrect.y = pos.y;
+  dstrect.w = src->w;
+  dstrect.h = src->h;
 
-  SDL_BlitSurface(src, nullptr, logical_surface, &dstrect);
+  SDL_BlitSurface(src, nullptr, m_logical_surface, &dstrect);
 }
 
 void
@@ -178,18 +192,18 @@ SDLFramebuffer::draw_surface(const FramebufferSurface& surface, const Rect& srcr
   SDL_Surface* src = impl->get_surface();
 
   SDL_Rect dstrect;
-  dstrect.x = static_cast<Sint16>(pos.x);
-  dstrect.y = static_cast<Sint16>(pos.y);
-  dstrect.w = 0;
-  dstrect.h = 0;
+  dstrect.x = pos.x;
+  dstrect.y = pos.y;
+  dstrect.w = srcrect.get_width();
+  dstrect.h = srcrect.get_height();
 
   SDL_Rect sdlsrcrect;
-  sdlsrcrect.x = static_cast<Sint16>(srcrect.left);
-  sdlsrcrect.y = static_cast<Sint16>(srcrect.top);
-  sdlsrcrect.w = static_cast<Uint16>(srcrect.get_width());
-  sdlsrcrect.h = static_cast<Uint16>(srcrect.get_height());
+  sdlsrcrect.x = srcrect.left;
+  sdlsrcrect.y = srcrect.top;
+  sdlsrcrect.w = srcrect.get_width();
+  sdlsrcrect.h = srcrect.get_height();
 
-  SDL_BlitSurface(src, &sdlsrcrect, logical_surface, &dstrect);
+  SDL_BlitSurface(src, &sdlsrcrect, m_logical_surface, &dstrect);
 }
 
 void
@@ -204,7 +218,7 @@ SDLFramebuffer::draw_line(Vector2i pos1, Vector2i pos2, Color color)
   int clipx1, clipx2, clipy1, clipy2;
   SDL_Rect rect;
 
-  SDL_GetClipRect(logical_surface, &rect);
+  SDL_GetClipRect(m_logical_surface, &rect);
   clipx1 = rect.x;
   clipx2 = rect.x + rect.w - 1;
   clipy1 = rect.y;
@@ -218,9 +232,9 @@ SDLFramebuffer::draw_line(Vector2i pos1, Vector2i pos2, Color color)
     clip(sy, clipy1, clipy2);
     clip(dy, clipy1, clipy2);
     if (sy < dy) {
-      draw_vline(logical_surface, sx, sy, dy - sy + 1, color);
+      draw_vline(m_logical_surface, sx, sy, dy - sy + 1, color);
     } else {
-      draw_vline(logical_surface, dx, dy, sy - dy + 1, color);
+      draw_vline(m_logical_surface, dx, dy, sy - dy + 1, color);
     }
     return;
   }
@@ -233,14 +247,14 @@ SDLFramebuffer::draw_line(Vector2i pos1, Vector2i pos2, Color color)
     clip(sx, clipx1, clipx2);
     clip(dx, clipx1, clipx2);
     if (sx < dx) {
-      draw_hline(logical_surface, sx, sy, dx - sx + 1, color);
+      draw_hline(m_logical_surface, sx, sy, dx - sx + 1, color);
     } else {
-      draw_hline(logical_surface, dx, dy, sx - dx + 1, color);
+      draw_hline(m_logical_surface, dx, dy, sx - dx + 1, color);
     }
     return;
   }
 
-  draw_pixel = get_draw_pixel(logical_surface);
+  draw_pixel = get_draw_pixel(m_logical_surface);
   if (!draw_pixel) {
     return;
   }
@@ -277,10 +291,10 @@ SDLFramebuffer::draw_line(Vector2i pos1, Vector2i pos2, Color color)
 
     int p = (ylen << 1) - xlen;
 
-    SDL_LockSurface(logical_surface);
+    SDL_LockSurface(m_logical_surface);
     for (x = sx; x < dx; ++x) {
       if (x >= clipx1 && x <= clipx2 && y >= clipy1 && y <= clipy2) {
-        draw_pixel(logical_surface, x, y, color);
+        draw_pixel(m_logical_surface, x, y, color);
       }
       if (p >= 0) {
         y += incr;
@@ -289,17 +303,17 @@ SDLFramebuffer::draw_line(Vector2i pos1, Vector2i pos2, Color color)
         p += (ylen << 1);
       }
     }
-    SDL_UnlockSurface(logical_surface);
+    SDL_UnlockSurface(m_logical_surface);
     return;
   }
 
   if (ylen > xlen) {
     int p = (xlen << 1) - ylen;
 
-    SDL_LockSurface(logical_surface);
+    SDL_LockSurface(m_logical_surface);
     for (y = sy; y < dy; ++y) {
       if (x >= clipx1 && x <= clipx2 && y >= clipy1 && y <= clipy2) {
-        draw_pixel(logical_surface, x, y, color);
+        draw_pixel(m_logical_surface, x, y, color);
       }
       if (p >= 0) {
         x += incr;
@@ -308,21 +322,21 @@ SDLFramebuffer::draw_line(Vector2i pos1, Vector2i pos2, Color color)
         p += (xlen << 1);
       }
     }
-    SDL_UnlockSurface(logical_surface);
+    SDL_UnlockSurface(m_logical_surface);
     return;
   }
 
   // Draw a diagonal line
   if (ylen == xlen) {
-    SDL_LockSurface(logical_surface);
+    SDL_LockSurface(m_logical_surface);
     while (y != dy) {
       if (x >= clipx1 && x <= clipx2 && y >= clipy1 && y <= clipy2) {
-        draw_pixel(logical_surface, x, y, color);
+        draw_pixel(m_logical_surface, x, y, color);
       }
       x += incr;
       ++y;
     }
-    SDL_UnlockSurface(logical_surface);
+    SDL_UnlockSurface(m_logical_surface);
   }
 }
 
@@ -348,12 +362,12 @@ SDLFramebuffer::fill_rect(const Rect& rect_, Color color)
   {
     SDL_Rect srcrect;
 
-    srcrect.x = static_cast<Sint16>(rect.left);
-    srcrect.y = static_cast<Sint16>(rect.top);
-    srcrect.w = static_cast<Uint16>(rect.get_width());
-    srcrect.h = static_cast<Uint16>(rect.get_height());
+    srcrect.x = rect.left;
+    srcrect.y = rect.top;
+    srcrect.w = rect.get_width();
+    srcrect.h = rect.get_height();
 
-    SDL_FillRect(logical_surface, &srcrect, SDL_MapRGBA(logical_surface->format, color.r, color.g, color.b, 255));
+    SDL_FillRect(m_logical_surface, &srcrect, SDL_MapRGBA(m_logical_surface->format, color.r, color.g, color.b, 255));
   }
   else if (color.a != 0)
   {
@@ -361,7 +375,7 @@ SDLFramebuffer::fill_rect(const Rect& rect_, Color color)
     int clipx1, clipx2, clipy1, clipy2;
     SDL_Rect cliprect;
 
-    SDL_GetClipRect(logical_surface, &cliprect);
+    SDL_GetClipRect(m_logical_surface, &cliprect);
     clipx1 = cliprect.x;
     clipx2 = cliprect.x + cliprect.w - 1;
     clipy1 = cliprect.y;
@@ -375,26 +389,26 @@ SDLFramebuffer::fill_rect(const Rect& rect_, Color color)
     left   = rect.left   < clipx1 ? clipx1 : rect.left;
     right  = rect.right  > clipx2 ? clipx2 : rect.right-1;
 
-    draw_pixel_func draw_pixel = get_draw_pixel(logical_surface);
+    draw_pixel_func draw_pixel = get_draw_pixel(m_logical_surface);
     if (!draw_pixel)
       return;
 
-    SDL_LockSurface(logical_surface);
+    SDL_LockSurface(m_logical_surface);
     for (int y = top; y <= bottom; ++y) {
       for (int x = left; x <= right; ++x) {
-        draw_pixel(logical_surface, x, y, color);
+        draw_pixel(m_logical_surface, x, y, color);
       }
     }
-    SDL_UnlockSurface(logical_surface);
+    SDL_UnlockSurface(m_logical_surface);
   }
 }
 
 void
 SDLFramebuffer::flip()
 {
-  // Scale the logical 800x600 render target to the physical screen size.
-  SDL_SoftStretch(logical_surface, nullptr, screen, nullptr);
-  SDL_Flip(screen);
+  // Scale the logical 800x600 render target to the physical window surface.
+  SDL_BlitScaled(m_logical_surface, nullptr, m_screen, nullptr);
+  SDL_UpdateWindowSurface(m_window);
 }
 
 void
@@ -405,56 +419,84 @@ SDLFramebuffer::update_rects(const std::vector<Rect>& rects)
   for(std::vector<Rect>::const_iterator i = rects.begin(); i != rects.end(); ++i)
   {
     SDL_Rect sdl_rect;
-    sdl_rect.x = static_cast<Sint16>(i->left);
-    sdl_rect.y = static_cast<Sint16>(i->top);
-    sdl_rect.w = static_cast<Uint16>(i->get_width());
-    sdl_rect.h = static_cast<Uint16>(i->get_height());
+    sdl_rect.x = i->left;
+    sdl_rect.y = i->top;
+    sdl_rect.w = i->get_width();
+    sdl_rect.h = i->get_height();
     sdl_rects.push_back(sdl_rect);
   }
 
-  SDL_UpdateRects(screen, static_cast<int>(sdl_rects.size()), const_cast<SDL_Rect*>(&*sdl_rects.begin()));
+  SDL_UpdateWindowSurfaceRects(m_window,
+                                sdl_rects.data(),
+                                static_cast<int>(sdl_rects.size()));
 }
 
 Size
 SDLFramebuffer::get_size() const
 {
-  return Size(screen->w, screen->h);
+  int w = 0, h = 0;
+  SDL_GetWindowSize(m_window, &w, &h);
+  return Size(w, h);
 }
 
 void
 SDLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resizable)
 {
-  Uint32 flags = 0;
+  m_fullscreen = fullscreen;
+  m_resizable  = resizable;
 
-  if (fullscreen)
+  if (m_window == nullptr)
   {
-    flags |= SDL_FULLSCREEN;
+    // First-time window creation
+    Uint32 flags = 0;
+    if (fullscreen)
+      flags |= SDL_WINDOW_FULLSCREEN;
+    else if (resizable)
+      flags |= SDL_WINDOW_RESIZABLE;
+
+    m_window = SDL_CreateWindow("Pingus " VERSION,
+                                SDL_WINDOWPOS_CENTERED,
+                                SDL_WINDOWPOS_CENTERED,
+                                size.width, size.height,
+                                flags);
+    if (m_window == nullptr)
+    {
+      log_error("Unable to create window: {}", SDL_GetError());
+      exit(1);
+    }
   }
-  else if (resizable)
+  else
   {
-    flags |= SDL_RESIZABLE;
+    // Window already exists — just resize / toggle fullscreen
+    if (fullscreen)
+      SDL_SetWindowFullscreen(m_window, SDL_WINDOW_FULLSCREEN);
+    else
+    {
+      SDL_SetWindowFullscreen(m_window, 0);
+      SDL_SetWindowSize(m_window, size.width, size.height);
+    }
   }
 
-  screen = SDL_SetVideoMode(size.width, size.height, 0, flags);
-
-  if (screen == nullptr)
+  // SDL_GetWindowSurface is invalidated after any resize; always refresh it
+  m_screen = SDL_GetWindowSurface(m_window);
+  if (m_screen == nullptr)
   {
-    log_error("Unable to set video mode: {}", SDL_GetError());
+    log_error("Unable to get window surface: {}", SDL_GetError());
     exit(1);
   }
 
   // Create an offscreen surface at logical resolution.
   // All drawing targets this surface; it is stretch-blitted to the
   // physical screen on every flip().
-  if (logical_surface)
-    SDL_FreeSurface(logical_surface);
-  logical_surface = SDL_CreateRGBSurface(
-    SDL_SWSURFACE,
+  if (m_logical_surface)
+    SDL_FreeSurface(m_logical_surface);
+  m_logical_surface = SDL_CreateRGBSurface(
+    0,
     Display::LOGICAL_WIDTH, Display::LOGICAL_HEIGHT,
-    screen->format->BitsPerPixel,
-    screen->format->Rmask, screen->format->Gmask,
-    screen->format->Bmask, screen->format->Amask);
-  if (!logical_surface)
+    m_screen->format->BitsPerPixel,
+    m_screen->format->Rmask, m_screen->format->Gmask,
+    m_screen->format->Bmask, m_screen->format->Amask);
+  if (m_logical_surface == nullptr)
   {
     log_error("Unable to create logical surface: {}", SDL_GetError());
     exit(1);
@@ -464,23 +506,26 @@ SDLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resizable
 bool
 SDLFramebuffer::is_fullscreen() const
 {
-  return screen->flags & SDL_FULLSCREEN;
+  if (!m_window) return m_fullscreen;
+  return (SDL_GetWindowFlags(m_window) &
+          (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
 }
 
 bool
 SDLFramebuffer::is_resizable() const
 {
-  return screen->flags & SDL_RESIZABLE;
+  if (!m_window) return m_resizable;
+  return (SDL_GetWindowFlags(m_window) & SDL_WINDOW_RESIZABLE) != 0;
 }
 
 void
 SDLFramebuffer::push_cliprect(const Rect& rect)
 {
   SDL_Rect sdl_rect;
-  sdl_rect.x = static_cast<Sint16>(rect.left);
-  sdl_rect.y = static_cast<Sint16>(rect.top);
-  sdl_rect.w = static_cast<Uint16>(rect.get_width());
-  sdl_rect.h = static_cast<Uint16>(rect.get_height());
+  sdl_rect.x = rect.left;
+  sdl_rect.y = rect.top;
+  sdl_rect.w = rect.get_width();
+  sdl_rect.h = rect.get_height();
 
   if (!cliprect_stack.empty())
   {
@@ -488,7 +533,7 @@ SDLFramebuffer::push_cliprect(const Rect& rect)
   }
 
   cliprect_stack.push_back(sdl_rect);
-  SDL_SetClipRect(logical_surface, &cliprect_stack.back());
+  SDL_SetClipRect(m_logical_surface, &cliprect_stack.back());
 }
 
 void
@@ -496,9 +541,9 @@ SDLFramebuffer::pop_cliprect()
 {
   cliprect_stack.pop_back();
   if (cliprect_stack.empty())
-    SDL_SetClipRect(logical_surface, nullptr);
+    SDL_SetClipRect(m_logical_surface, nullptr);
   else
-    SDL_SetClipRect(logical_surface, &cliprect_stack.back());
+    SDL_SetClipRect(m_logical_surface, &cliprect_stack.back());
 }
 
 

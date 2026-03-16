@@ -10,116 +10,141 @@
 // (at your option) any later version.
 
 #include "engine/display/blitter.hpp"
-
 #include "engine/display/blitter_impl.hpp"
 
+#include <cassert>
+
+#include "engine/display/surface.hpp"
+
 namespace pingus {
+
 
 SDL_Surface*
 Blitter::scale_surface(SDL_Surface* surface, int width, int height)
 {
-  int i;
-  int j;
-  unsigned char *pixels;
-  unsigned char *new_pixels;
-  int x;
-  int bpp;
-  int new_pitch;
+  assert(surface != nullptr);
+
   SDL_Surface* new_surface;
 
-  bpp = surface->format->BytesPerPixel;
-  if (bpp == 1) {
-    SDL_Color pal[256];
-    Uint32 ckey;
-    int useckey;
+  if (surface->format->palette)
+  {
+    // Paletted (indexed colour) surface
+    Uint32 colorkey = 0;
+    bool useckey = (SDL_GetColorKey(surface, &colorkey) == 0);
 
-    useckey = surface->flags & SDL_SRCCOLORKEY;
-    new_surface = SDL_CreateRGBSurface(SDL_SWSURFACE | (useckey ? SDL_SRCCOLORKEY : 0), width, height, 8, 0, 0, 0, 0);
+    new_surface = SDL_CreateRGBSurface(0, width, height, 8, 0, 0, 0, 0);
+    if (useckey)
+      SDL_SetColorKey(new_surface, SDL_TRUE, colorkey);
 
     SDL_LockSurface(surface);
     SDL_LockSurface(new_surface);
 
-    pixels     = static_cast<unsigned char*>(surface->pixels);
-    new_pixels = static_cast<unsigned char*>(new_surface->pixels);
-    new_pitch  = new_surface->pitch;
+    float xscale = static_cast<float>(surface->w) / static_cast<float>(width);
+    float yscale = static_cast<float>(surface->h) / static_cast<float>(height);
 
-    memcpy(pal, surface->format->palette->colors, sizeof(SDL_Color) * 256);
-    ckey = surface->format->colorkey;
-
-    for (i = 0; i < height; ++i) {
-      x = i * new_pitch;
-      for (j = 0; j < width; ++j) {
-        new_pixels[x] = pixels[(i * surface->h / height) * surface->pitch + j * surface->w / width];
-        ++x;
+    for (int y = 0; y < new_surface->h; ++y)
+      for (int x = 0; x < new_surface->w; ++x)
+      {
+        Uint8* src = static_cast<Uint8*>(surface->pixels)
+                     + (static_cast<int>(static_cast<float>(y) * yscale) * surface->pitch)
+                     + static_cast<int>(static_cast<float>(x) * xscale);
+        Uint8* dst = static_cast<Uint8*>(new_surface->pixels) + y * new_surface->pitch + x;
+        *dst = *src;
       }
-    }
 
     SDL_UnlockSurface(surface);
     SDL_UnlockSurface(new_surface);
 
-    SDL_SetPalette(new_surface, SDL_LOGPAL | SDL_PHYSPAL, pal, 0, 256);
-    if (useckey) {
-      SDL_SetColorKey(new_surface, SDL_SRCCOLORKEY | SDL_RLEACCEL, ckey);
-    }
-  } else {
-    int ix, iy;
-    float fx, fy, fz;
-    unsigned char *p1, *p2, *p3, *p4;
-
-    new_surface = SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, surface->format->BitsPerPixel,
-                                       surface->format->Rmask, surface->format->Gmask, surface->format->Bmask, surface->format->Amask);
+    if (surface->format->palette && new_surface->format->palette)
+      SDL_SetPaletteColors(new_surface->format->palette,
+                           surface->format->palette->colors,
+                           0,
+                           surface->format->palette->ncolors);
+  }
+  else
+  {
+    new_surface = SDL_CreateRGBSurface(0, width, height,
+                                       surface->format->BitsPerPixel,
+                                       surface->format->Rmask,
+                                       surface->format->Gmask,
+                                       surface->format->Bmask,
+                                       surface->format->Amask);
 
     SDL_LockSurface(surface);
     SDL_LockSurface(new_surface);
 
-    pixels     = static_cast<unsigned char*>(surface->pixels);
-    new_pixels = static_cast<unsigned char*>(new_surface->pixels);
-    new_pitch = new_surface->pitch;
+    float xscale = static_cast<float>(surface->w) / static_cast<float>(width);
+    float yscale = static_cast<float>(surface->h) / static_cast<float>(height);
 
-    for (i = 0; i < height; ++i) {
-      x = i * new_pitch;
-      fy = static_cast<float>(i) * static_cast<float>(surface->h) / static_cast<float>(height);
-      iy = static_cast<int>(fy);
-      fy -= static_cast<float>(iy);
-      for (j = 0; j < width; ++j) {
-        fx = static_cast<float>(j) * static_cast<float>(surface->w) / static_cast<float>(width);
-        ix = static_cast<int>(fx);
-        fx -= static_cast<float>(ix);
-        fz = (fx + fy) / 2;
-
-        p1 = &pixels[iy * surface->pitch + ix * bpp];
-        p2 = (iy != surface->h - 1) ?
-          &pixels[(iy + 1) * surface->pitch + ix * bpp] : p1;
-        p3 = (ix != surface->w - 1) ?
-          &pixels[iy * surface->pitch + (ix + 1) * bpp] : p1;
-        p4 = (iy != surface->h - 1 && ix != surface->w - 1) ?
-          &pixels[(iy + 1) * surface->pitch + (ix + 1) * bpp] : p1;
-
-        new_pixels[x + 0] = static_cast<unsigned char>(
-          (static_cast<float>(p1[0]) * (1 - fy) + static_cast<float>(p2[0]) * fy +
-           static_cast<float>(p1[0]) * (1 - fx) + static_cast<float>(p3[0]) * fx +
-           static_cast<float>(p1[0]) * (1 - fz) + static_cast<float>(p4[0]) * fz) / 3.0 + .5);
-        new_pixels[x + 1] = static_cast<unsigned char>(
-          (static_cast<float>(p1[1]) * (1 - fy) + static_cast<float>(p2[1]) * fy +
-           static_cast<float>(p1[1]) * (1 - fx) + static_cast<float>(p3[1]) * fx +
-           static_cast<float>(p1[1]) * (1 - fz) + static_cast<float>(p4[1]) * fz) / 3.0 + .5);
-        new_pixels[x + 2] = static_cast<unsigned char>(
-          (static_cast<float>(p1[2]) * (1 - fy) + static_cast<float>(p2[2]) * fy +
-           static_cast<float>(p1[2]) * (1 - fx) + static_cast<float>(p3[2]) * fx +
-           static_cast<float>(p1[2]) * (1 - fz) + static_cast<float>(p4[2]) * fz) / 3.0 + .5);
-        if (bpp == 4) {
-          new_pixels[x + 3] = static_cast<unsigned char>(
-            (static_cast<float>(p1[3]) * (1 - fy) + static_cast<float>(p2[3]) * fy +
-             static_cast<float>(p1[3]) * (1 - fx) + static_cast<float>(p3[3]) * fx +
-             static_cast<float>(p1[3]) * (1 - fz) + static_cast<float>(p4[3]) * fz) / 3.0 + .5);
-        }
-        x += bpp;
+    for (int y = 0; y < new_surface->h; ++y)
+      for (int x = 0; x < new_surface->w; ++x)
+      {
+        Uint8* src = static_cast<Uint8*>(surface->pixels)
+                     + (static_cast<int>(static_cast<float>(y) * yscale) * surface->pitch)
+                     + (static_cast<int>(static_cast<float>(x) * xscale) * surface->format->BytesPerPixel);
+        Uint8* dst = static_cast<Uint8*>(new_surface->pixels)
+                     + y * new_surface->pitch
+                     + x * new_surface->format->BytesPerPixel;
+        memcpy(dst, src, surface->format->BytesPerPixel);
       }
-    }
 
     SDL_UnlockSurface(surface);
     SDL_UnlockSurface(new_surface);
   }
+
+  return new_surface;
+}
+
+SDL_Surface*
+Blitter::create_surface_rgba(int w, int h)
+{
+  return SDL_CreateRGBSurface(0, w, h, 32,
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+                              0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff
+#else
+                              0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000
+#endif
+    );
+}
+
+SDL_Surface*
+Blitter::create_surface_rgb(int w, int h)
+{
+  return SDL_CreateRGBSurface(0, w, h, 24,
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+                              0xff0000, 0x00ff00, 0x0000ff, 0x000000
+#else
+                              0x0000ff, 0x00ff00, 0xff0000, 0x000000
+#endif
+    );
+}
+
+SDL_Surface*
+Blitter::create_surface_from_format(SDL_Surface* surface, int w, int h)
+{
+  SDL_Surface* new_surface = SDL_CreateRGBSurface(0, w, h,
+                              surface->format->BitsPerPixel,
+                              surface->format->Rmask,
+                              surface->format->Gmask,
+                              surface->format->Bmask,
+                              surface->format->Amask);
+
+  // Propagate palette (for indexed/paletted surfaces)
+  if (surface->format->palette && new_surface->format->palette)
+    SDL_SetPaletteColors(new_surface->format->palette,
+                         surface->format->palette->colors,
+                         0, surface->format->palette->ncolors);
+
+  // Propagate colorkey
+  Uint32 colorkey = 0;
+  if (SDL_GetColorKey(surface, &colorkey) == 0)
+    SDL_SetColorKey(new_surface, SDL_TRUE, colorkey);
+
+  // Propagate blend mode (SDL2 equivalent of SDL_SRCALPHA)
+  // Without this, surfaces with transparency render as solid white blocks.
+  SDL_BlendMode blend;
+  SDL_GetSurfaceBlendMode(surface, &blend);
+  SDL_SetSurfaceBlendMode(new_surface, blend);
 
   return new_surface;
 }
@@ -175,65 +200,6 @@ Blitter::rotate_270_flip (Surface sur)
   return BlitterImpl::modify<BlitterImpl::transform_rot270_flip>(sur);
 }
 
-SDL_Surface*
-Blitter::create_surface_rgba(int w, int h)
-{
-  return SDL_CreateRGBSurface(SDL_SWSURFACE | SDL_SRCALPHA, w, h, 32,
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-                              0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff
-#else
-                              0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000
-#endif
-    );
-}
-
-SDL_Surface*
-Blitter::create_surface_rgb(int w, int h)
-{
-  return SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 24,
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-                              0xff000000, 0x00ff0000, 0x0000ff00, 0x00000000
-#else
-                              0x000000ff, 0x0000ff00, 0x00ff0000, 0x00000000
-#endif
-    );
-}
-
-SDL_Surface*
-Blitter::create_surface_from_format(SDL_Surface* surface, int w, int h)
-{
-  Uint32 flags = 0;
-  if (surface->flags & SDL_SWSURFACE)
-    flags |= SDL_SWSURFACE;
-
-  if (surface->flags & SDL_HWSURFACE)
-    flags |= SDL_HWSURFACE;
-
-  if (surface->flags & SDL_SRCCOLORKEY)
-    flags |= SDL_SRCCOLORKEY;
-
-  if (surface->flags & SDL_SRCALPHA)
-    flags |= SDL_SRCALPHA;
-
-  SDL_Surface* new_surface = SDL_CreateRGBSurface(flags, w, h,
-                                                  surface->format->BitsPerPixel,
-                                                  surface->format->Rmask,
-                                                  surface->format->Gmask,
-                                                  surface->format->Bmask,
-                                                  surface->format->Amask);
-
-  if (surface->flags & SDL_SRCALPHA)
-    SDL_SetAlpha(new_surface, SDL_SRCALPHA, surface->format->alpha);
-
-  if (surface->format->palette)
-    SDL_SetPalette(new_surface, SDL_LOGPAL, surface->format->palette->colors,
-                   0, surface->format->palette->ncolors);
-
-  if (surface->flags & SDL_SRCCOLORKEY)
-    SDL_SetColorKey(new_surface, SDL_SRCCOLORKEY, surface->format->colorkey);
-
-  return new_surface;
-}
 
 } // namespace pingus
 

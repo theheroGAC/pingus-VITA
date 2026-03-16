@@ -158,8 +158,8 @@ public:
   constexpr bool contains(const Vector2i& pos) const noexcept
   {
     return
-      left <= pos.x && pos.x < right &&
-      top  <= pos.y && pos.y < bottom;
+      left <= pos.x && pos.x <= right &&
+      top  <= pos.y && pos.y <= bottom;
   }
 
   //: Check if rect is inside this

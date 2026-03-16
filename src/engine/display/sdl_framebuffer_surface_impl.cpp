@@ -17,10 +17,17 @@ namespace pingus {
 SDLFramebufferSurfaceImpl::SDLFramebufferSurfaceImpl(SDL_Surface* src) :
   surface()
 {
-  if (src->format->Amask != 0 || (src->flags & SDL_SRCCOLORKEY))
-    surface = SDL_DisplayFormatAlpha(src);
+  // In SDL2, SDL_DisplayFormat / SDL_DisplayFormatAlpha no longer exist.
+  // We use SDL_ConvertSurfaceFormat instead.
+  // Pick RGBA8888 when the source has an alpha channel or a colorkey,
+  // otherwise use RGB24 (no alpha).
+  Uint32 colorkey = 0;
+  bool has_colorkey = (SDL_GetColorKey(src, &colorkey) == 0);
+
+  if (src->format->Amask != 0 || has_colorkey)
+    surface = SDL_ConvertSurfaceFormat(src, SDL_PIXELFORMAT_ARGB8888, 0);
   else
-    surface = SDL_DisplayFormat(src);
+    surface = SDL_ConvertSurfaceFormat(src, SDL_PIXELFORMAT_RGB24, 0);
 }
 
 SDLFramebufferSurfaceImpl::~SDLFramebufferSurfaceImpl()

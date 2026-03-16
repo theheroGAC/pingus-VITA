@@ -16,7 +16,7 @@
 #include <string>
 #include <string_view>
 #include <memory>
-#include <SDL_mixer.h>
+#include <SDL2/SDL_mixer.h>
 
 namespace pingus {
 

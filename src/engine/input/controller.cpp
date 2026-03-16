@@ -223,9 +223,11 @@ Controller::add_scroller_event(int id, float xrel, float yrel)
 }
 
 void
-Controller::add_keyboard_event(const SDL_KeyboardEvent& ev)
+Controller::add_keyboard_event(const SDL_KeyboardEvent& ev, uint32_t unicode)
 {
-  events.push_back(makeKeyboardEvent(ev));
+  Event event = makeKeyboardEvent(ev);
+  event.keyboard.unicode = unicode;
+  events.push_back(event);
 }
 
 void

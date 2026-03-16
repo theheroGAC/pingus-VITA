@@ -12,7 +12,7 @@
 #ifndef HEADER_PINGUS_ENGINE_SYSTEM_SDL_HPP
 #define HEADER_PINGUS_ENGINE_SYSTEM_SDL_HPP
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 
 #include "pingus/options.hpp"
 

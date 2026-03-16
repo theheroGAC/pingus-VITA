@@ -22,12 +22,29 @@ namespace pingus {
 
 
 OpenGLFramebuffer::OpenGLFramebuffer() :
-  screen(),
+  m_window(nullptr),
+  m_gl_context(nullptr),
+  m_window_w(0),
+  m_window_h(0),
   cliprect_stack(),
   m_last_texture_id(0),
   m_texture_enabled(false),
   m_texcoord_array_enabled(false)
 {
+}
+
+OpenGLFramebuffer::~OpenGLFramebuffer()
+{
+  if (m_gl_context)
+  {
+    SDL_GL_DeleteContext(m_gl_context);
+    m_gl_context = nullptr;
+  }
+  if (m_window)
+  {
+    SDL_DestroyWindow(m_window);
+    m_window = nullptr;
+  }
 }
 
 FramebufferSurface
@@ -39,38 +56,71 @@ OpenGLFramebuffer::create_surface(const Surface& surface)
 void
 OpenGLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resizable)
 {
-  int flags = SDL_OPENGL;
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,   16);
+  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE,  0);
+
+  Uint32 flags = SDL_WINDOW_OPENGL;
 
 #ifdef __WII__
-  // Wii Specific OpenGL (OpenGX) setup
-  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
-  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
-  flags |= SDL_FULLSCREEN;
+  // Wii always runs fullscreen
+  flags |= SDL_WINDOW_FULLSCREEN;
+#else
+  if (fullscreen)
+    flags |= SDL_WINDOW_FULLSCREEN;
+  else if (resizable)
+    flags |= SDL_WINDOW_RESIZABLE;
 #endif
 
-  if (fullscreen)
+  if (m_window == nullptr)
   {
-    flags |= SDL_FULLSCREEN;
+    // First-time creation
+    m_window = SDL_CreateWindow("Pingus " VERSION,
+                                SDL_WINDOWPOS_CENTERED,
+                                SDL_WINDOWPOS_CENTERED,
+                                size.width, size.height,
+                                flags);
+    if (m_window == nullptr)
+    {
+      std::ostringstream msg;
+      msg << "Couldn't create OpenGL window ("
+          << size.width << "x" << size.height << "): " << SDL_GetError();
+      throw std::runtime_error(msg.str());
+    }
+
+    m_gl_context = SDL_GL_CreateContext(m_window);
+    if (m_gl_context == nullptr)
+    {
+      std::ostringstream msg;
+      msg << "Couldn't create OpenGL context: " << SDL_GetError();
+      throw std::runtime_error(msg.str());
+    }
+
+    // SDL_GL_SetSwapInterval is absent in some Wii portlib builds and causes
+    // a null-function-pointer crash if called there.
+#ifndef __WII__
+    SDL_GL_SetSwapInterval(1);
+#endif
   }
-  else if (resizable)
+  else
   {
-    flags |= SDL_RESIZABLE;
+    // Window already exists - toggle fullscreen / resize
+    if (fullscreen)
+      SDL_SetWindowFullscreen(m_window, SDL_WINDOW_FULLSCREEN);
+    else
+    {
+      SDL_SetWindowFullscreen(m_window, 0);
+      SDL_SetWindowSize(m_window, size.width, size.height);
+    }
   }
 
-  int width = size.width;
-  int height = size.height;
-  int bpp = 0; // auto-detect
-
-  screen = SDL_SetVideoMode(width, height, bpp, flags);
-
-  if(screen == 0)
-  {
-    std::ostringstream msg;
-    msg << "Couldn't set video mode (" << width << "x" << height
-        << "-" << bpp << "bpp): " << SDL_GetError();
-    throw std::runtime_error(msg.str());
-  }
+  // SDL_GL_GetDrawableSize is absent in some Wii portlib builds; use
+  // SDL_GetWindowSize on Wii (no HiDPI scaling there anyway).
+#ifdef __WII__
+  SDL_GetWindowSize(m_window, &m_window_w, &m_window_h);
+#else
+  SDL_GL_GetDrawableSize(m_window, &m_window_w, &m_window_h);
+#endif
 
   glEnableClientState(GL_VERTEX_ARRAY);
   glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -85,7 +135,7 @@ OpenGLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resiza
   // Fix for texture corruption (garbage) on some drivers/platforms
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-  glViewport(0, 0, screen->w, screen->h);
+  glViewport(0, 0, m_window_w, m_window_h);
 
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
@@ -104,19 +154,22 @@ OpenGLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resiza
 bool
 OpenGLFramebuffer::is_fullscreen() const
 {
-  return screen->flags & SDL_FULLSCREEN;
+  if (!m_window) return false;
+  return (SDL_GetWindowFlags(m_window) &
+          (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
 }
 
 bool
 OpenGLFramebuffer::is_resizable() const
 {
-  return screen->flags & SDL_RESIZABLE;
+  if (!m_window) return false;
+  return (SDL_GetWindowFlags(m_window) & SDL_WINDOW_RESIZABLE) != 0;
 }
 
 void
 OpenGLFramebuffer::flip()
 {
-  SDL_GL_SwapBuffers();
+  SDL_GL_SwapWindow(m_window);
 }
 
 void
@@ -140,11 +193,11 @@ OpenGLFramebuffer::push_cliprect(const Rect& rect)
   {
     // Scale logical cliprect coords to physical pixel coords for glScissor.
     // glScissor operates in physical pixels; cliprects are in logical space.
-    const float sx = static_cast<float>(screen->w) / Display::LOGICAL_WIDTH;
-    const float sy = static_cast<float>(screen->h) / Display::LOGICAL_HEIGHT;
+    const float sx = static_cast<float>(m_window_w) / Display::LOGICAL_WIDTH;
+    const float sy = static_cast<float>(m_window_h) / Display::LOGICAL_HEIGHT;
     const Rect& cr = cliprect_stack.back();
     glScissor(static_cast<int>(cr.left   * sx),
-              static_cast<int>(screen->h - cr.bottom * sy),
+              static_cast<int>(m_window_h - cr.bottom * sy),
               static_cast<int>(cr.get_width()  * sx),
               static_cast<int>(cr.get_height() * sy));
   }
@@ -163,11 +216,11 @@ OpenGLFramebuffer::pop_cliprect()
   {
     {
       // Scale logical cliprect coords to physical pixel coords for glScissor.
-      const float sx = static_cast<float>(screen->w) / Display::LOGICAL_WIDTH;
-      const float sy = static_cast<float>(screen->h) / Display::LOGICAL_HEIGHT;
+      const float sx = static_cast<float>(m_window_w) / Display::LOGICAL_WIDTH;
+      const float sy = static_cast<float>(m_window_h) / Display::LOGICAL_HEIGHT;
       const Rect& rect = cliprect_stack.back();
       glScissor(static_cast<int>(rect.left   * sx),
-                static_cast<int>(screen->h - rect.bottom * sy),
+                static_cast<int>(m_window_h - rect.bottom * sy),
                 static_cast<int>(rect.get_width()  * sx),
                 static_cast<int>(rect.get_height() * sy));
     }
@@ -177,7 +230,7 @@ OpenGLFramebuffer::pop_cliprect()
 void
 OpenGLFramebuffer::draw_surface(const FramebufferSurface& src, Vector2i pos)
 {
-  draw_surface(src, Rect(Vector2i(0, 0), src.get_size()),  pos);
+  draw_surface(src, Rect(Vector2i(0, 0), src.get_size()), pos);
 }
 
 void
@@ -356,7 +409,7 @@ OpenGLFramebuffer::fill_rect(const Rect& rect, Color color)
 Size
 OpenGLFramebuffer::get_size() const
 {
-  return Size(screen->w, screen->h);
+  return Size(m_window_w, m_window_h);
 }
 
 void

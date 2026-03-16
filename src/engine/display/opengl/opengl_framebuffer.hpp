@@ -19,7 +19,7 @@
 #  include <GL/glu.h>
 #  include <GL/glext.h>
 #else
-#  include <SDL_opengl.h>
+#  include <SDL2/SDL_opengl.h>
 #endif
 
 #include <vector>
@@ -30,7 +30,10 @@ namespace pingus {
 class OpenGLFramebuffer : public Framebuffer
 {
 private:
-  SDL_Surface* screen;
+  SDL_Window*    m_window;
+  SDL_GLContext  m_gl_context;
+  int            m_window_w;
+  int            m_window_h;
   std::vector<Rect> cliprect_stack;
 
   // State caching to avoid redundant OpenGL calls
@@ -40,11 +43,13 @@ private:
 
 public:
   OpenGLFramebuffer();
+  ~OpenGLFramebuffer();
 
   FramebufferSurface create_surface(const Surface& surface);
 
   void set_video_mode(const Size& size, bool fullscreen, bool resizable);
-
+  bool is_fullscreen() const;
+  bool is_resizable() const;
   void flip();
 
   void push_cliprect(const Rect& rect);
@@ -58,8 +63,8 @@ public:
   void fill_rect(const Rect& rect, Color color);
 
   Size get_size() const;
-  bool is_fullscreen() const;
-  bool is_resizable() const;
+
+  SDL_Window* get_window() const override { return m_window; }
 
   /** Forces the framebuffer to reset its internal state cache and OpenGL state. */
   void invalidate_state();

@@ -67,9 +67,10 @@ OpenGLFramebufferSurfaceImpl::OpenGLFramebufferSurfaceImpl(SDL_Surface* src) :
 
       glGenTextures(1, &tile.handle);
 
-      // Determine format
-      // Check for BOTH per-pixel alpha AND colorkey transparency
-      bool has_alpha = (src->format->Amask != 0) || (src->flags & SDL_SRCCOLORKEY);
+      // Determine format: check for per-pixel alpha AND colorkey transparency
+      Uint32 colorkey_val = 0;
+      bool has_colorkey = (SDL_GetColorKey(src, &colorkey_val) == 0);
+      bool has_alpha    = (src->format->Amask != 0) || has_colorkey;
 
       GLenum gl_format = GL_RGBA;
       GLenum gl_type = GL_UNSIGNED_BYTE;
@@ -94,8 +95,7 @@ OpenGLFramebufferSurfaceImpl::OpenGLFramebufferSurfaceImpl(SDL_Surface* src) :
       }
 #endif
 
-      // Create a temporary surface for the tile
-      SDL_Surface* convert = SDL_CreateRGBSurface(SDL_SWSURFACE,
+      SDL_Surface* convert = SDL_CreateRGBSurface(0,
                                                   tile.texture_size.width,
                                                   tile.texture_size.height,
                                                   bpp, rmask, gmask, bmask, amask);
@@ -115,14 +115,10 @@ OpenGLFramebufferSurfaceImpl::OpenGLFramebufferSurfaceImpl(SDL_Surface* src) :
       SDL_Rect src_rect = { (Sint16)x, (Sint16)y, (Uint16)w, (Uint16)h };
       SDL_Rect dst_rect = { 0, 0, (Uint16)w, (Uint16)h };
 
-      // Save alpha settings (SDL 1.2 style)
-      Uint8 saved_alpha = src->format->alpha;
-      Uint32 saved_flags = src->flags & (SDL_SRCALPHA | SDL_RLEACCEL);
-
       // Disable per-surface alpha blending for the copy so we get raw pixel data.
-      // Note: This does NOT disable Colorkeying. SDL_BlitSurface respects colorkey
-      // even if Alpha is disabled.
-      SDL_SetAlpha(src, 0, 0);
+      SDL_BlendMode saved_blend = SDL_BLENDMODE_NONE;
+      SDL_GetSurfaceBlendMode(src, &saved_blend);
+      SDL_SetSurfaceBlendMode(src, SDL_BLENDMODE_NONE);
 
       SDL_BlitSurface(src, &src_rect, convert, &dst_rect);
 
@@ -165,10 +161,8 @@ OpenGLFramebufferSurfaceImpl::OpenGLFramebufferSurfaceImpl(SDL_Surface* src) :
         SDL_UnlockSurface(convert);
       }
 
-      // Restore alpha settings
-      if (src->format->Amask != 0) {
-        SDL_SetAlpha(src, saved_flags, saved_alpha);
-      }
+      // Restore the original blend mode
+      SDL_SetSurfaceBlendMode(src, saved_blend);
 
       glBindTexture(GL_TEXTURE_2D, tile.handle);
 

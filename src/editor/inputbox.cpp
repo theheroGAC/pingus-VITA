@@ -85,9 +85,9 @@ Inputbox::on_key_pressed(const input::KeyboardEvent& ev)
   }
   else
   {
-    if (ev.keysym.unicode)
+    if (ev.unicode)
     {
-      m_text += UTF8::encode_utf8(ev.keysym.unicode);
+      m_text += UTF8::encode_utf8(ev.unicode);
       try {
         if (on_change) on_change(m_text);
         m_faulty_input = false;

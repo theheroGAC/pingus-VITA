@@ -405,15 +405,33 @@ class Keyboard : public Control
 {
 protected:
   SDL_KeyboardEvent m_ev;
+  uint32_t          m_unicode; // UTF-32 codepoint from SDL_TEXTINPUT, or 0
 
 public:
   Keyboard(Control* parent_) :
     Control(parent_),
-    m_ev()
+    m_ev(),
+    m_unicode(0)
   {}
 
-  void send_char(const SDL_KeyboardEvent& ev) { m_ev = ev; notify_parent(); }
-  SDL_KeyboardEvent get_ev() { return m_ev; }
+  // Called for SDL_KEYDOWN / SDL_KEYUP events
+  void send_char(const SDL_KeyboardEvent& ev)
+  {
+    m_ev      = ev;
+    m_unicode = 0;
+    notify_parent();
+  }
+
+  // Called for SDL_TEXTINPUT events; carries the UTF-32 codepoint
+  void send_text(uint32_t codepoint)
+  {
+    m_ev      = {};       // no physical key info
+    m_unicode = codepoint;
+    notify_parent();
+  }
+
+  SDL_KeyboardEvent get_ev()      { return m_ev; }
+  uint32_t          get_unicode() { return m_unicode; }
 
 private:
   Keyboard(const Keyboard&);
@@ -439,7 +457,9 @@ public:
   }
 
   void update(Control* p) {
-    m_ev = dynamic_cast<Keyboard*>(p)->get_ev();
+    Keyboard* kb = dynamic_cast<Keyboard*>(p);
+    m_ev      = kb->get_ev();
+    m_unicode = kb->get_unicode();
     notify_parent();
   }
 
@@ -463,7 +483,7 @@ public:
   {}
 
   virtual void notify_parent() {
-    controller->add_keyboard_event(m_ev);
+    controller->add_keyboard_event(m_ev, m_unicode);
   }
 
 private:

@@ -53,6 +53,7 @@ public:
 
   void update(float delta)
   {
+    if (!x_axis || !y_axis) return;
     x_axis->update(delta);
     y_axis->update(delta);
     if (speed_button) speed_button->update(delta);
@@ -118,6 +119,7 @@ public:
 
   void update(float delta_)
   {
+    if (!x_axis || !y_axis) return;
     x_axis->update(delta_);
     y_axis->update(delta_);
 
@@ -179,6 +181,14 @@ public:
 
   void update(float delta_t)
   {
+    // Guard against null buttons: create_button() can return nullptr when
+    // the underlying driver can't find the requested joystick device.
+    // Calling a virtual function through a null pointer causes a PC=0 ISI
+    // crash on Wii (null vtable lookup). Skip the update entirely if any
+    // button failed to initialise.
+    if (!up || !down || !left || !right)
+      return;
+
     up->update(delta_t);
     down->update(delta_t);
     left->update(delta_t);

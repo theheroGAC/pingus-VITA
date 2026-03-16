@@ -192,7 +192,9 @@ ConfigManager::set_mouse_grab(bool v)
 
   if (v != get_mouse_grab())
   {
-    SDL_WM_GrabInput(v ? SDL_GRAB_ON : SDL_GRAB_OFF);
+#ifndef __WII__
+    SDL_SetRelativeMouseMode(v ? SDL_TRUE : SDL_FALSE);
+#endif
     if (on_mouse_grab_change)
       on_mouse_grab_change(v);
   }
@@ -203,7 +205,11 @@ ConfigManager::set_mouse_grab(bool v)
 bool
 ConfigManager::get_mouse_grab() const
 {
-  return (SDL_WM_GrabInput(SDL_GRAB_QUERY) == SDL_GRAB_ON);
+#ifdef __WII__
+  return false; // No mouse grab on Wii
+#else
+  return (SDL_GetRelativeMouseMode() == SDL_TRUE);
+#endif
 }
 
 void

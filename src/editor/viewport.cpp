@@ -107,7 +107,7 @@ Viewport::on_secondary_button_click(int x_, int y_)
 void
 Viewport::on_primary_button_press(int x_, int y_)
 {
-  Uint8* keystate = SDL_GetKeyState(NULL);
+  const Uint8* keystate = SDL_GetKeyboardState(NULL);
 
   mouse_world_pos  = screen2world(x_, y_);
   mouse_screen_pos = Vector2i(x_, y_);
@@ -121,7 +121,7 @@ Viewport::on_primary_button_press(int x_, int y_)
       if (selection.find(obj) == selection.end())
       {
         // if the clicked on object isn't selected, select it and deselect the rest
-        if (keystate[SDLK_LSHIFT] || keystate[SDLK_RSHIFT])
+        if (keystate[SDL_SCANCODE_LSHIFT] || keystate[SDL_SCANCODE_RSHIFT])
         {
           selection.insert(obj);
           selection_changed(selection);
@@ -135,7 +135,7 @@ Viewport::on_primary_button_press(int x_, int y_)
       }
       else
       {
-        if (keystate[SDLK_LSHIFT] || keystate[SDLK_RSHIFT])
+        if (keystate[SDL_SCANCODE_LSHIFT] || keystate[SDL_SCANCODE_RSHIFT])
         {
           // if object is already selected and shift is pressed remove
           // it from the selection
@@ -159,7 +159,7 @@ Viewport::on_primary_button_press(int x_, int y_)
       highlighted_area.left = highlighted_area.right  = mouse_world_pos.x;
       highlighted_area.top  = highlighted_area.bottom = mouse_world_pos.y;
 
-      if (!keystate[SDLK_LSHIFT] && !keystate[SDLK_RSHIFT])
+      if (!keystate[SDL_SCANCODE_LSHIFT] && !keystate[SDL_SCANCODE_RSHIFT])
       {
         clear_selection();
         selection_changed(selection);

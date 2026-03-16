@@ -12,7 +12,7 @@
 #include <format>
 #include "engine/sound/sound_real.hpp"
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 #include <stdexcept>
 
 #include "engine/sound/sound_res_mgr.hpp"

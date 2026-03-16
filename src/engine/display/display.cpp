@@ -63,7 +63,7 @@ Display::resize(const Size& size_)
 {
   Size size(size_);
 
-  // Limit Window size so some reasonable minimum
+  // Limit Window size to some reasonable minimum
   if (size.width  < 640) size.width  = 640;
   if (size.height < 480) size.height = 480;
 
@@ -152,38 +152,29 @@ Display::get_framebuffer()
 Size
 Display::find_closest_fullscreen_video_mode(const Size& size)
 {
-  SDL_Rect** modes = SDL_ListModes(NULL, SDL_FULLSCREEN);
-
-  if (modes == static_cast<SDL_Rect**>(0))
-  { // No resolutions at all available, bad
+  int num_modes = SDL_GetNumDisplayModes(0);
+  if (num_modes <= 0)
     return size;
-  }
-  else if(modes == reinterpret_cast<SDL_Rect**>(-1))
-  {
-    return size;
-  }
-  else
-  {
-    // FIXME: This might not work that well with different aspect ratios
-    int distance = -1;
-    Size best_fit = size;
 
-    for(int i = 0; modes[i]; ++i)
+  int best_distance = -1;
+  Size best_fit = size;
+
+  for (int i = 0; i < num_modes; ++i)
+  {
+    SDL_DisplayMode mode;
+    if (SDL_GetDisplayMode(0, i, &mode) != 0)
+      continue;
+
+    int this_distance = std::abs(size.width - mode.w) + std::abs(size.height - mode.h);
+    if (best_distance == -1 || best_distance > this_distance)
     {
-      int this_distance = abs(size.width - modes[i]->w) + abs(size.height - modes[i]->h);
-
-      if (distance == -1 || distance > this_distance)
-      {
-        distance = this_distance;
-
-        best_fit.width  = modes[i]->w;
-        best_fit.height = modes[i]->h;
-      }
+      best_distance  = this_distance;
+      best_fit.width  = mode.w;
+      best_fit.height = mode.h;
     }
-
-    return best_fit;
   }
 
+  return best_fit;
 }
 
 struct SortBySize
@@ -198,17 +189,12 @@ std::vector<Size>
 Display::get_fullscreen_video_modes()
 {
   std::vector<Size> video_modes;
-  SDL_Rect** modes = SDL_ListModes(NULL, SDL_FULLSCREEN);
 
-  if (modes == reinterpret_cast<SDL_Rect**>(0))
-  { // No resolutions at all available, bad
-
-  }
-  else if(modes == reinterpret_cast<SDL_Rect**>(-1))
-  {  // FIXME: Under which OSs is this triggred, if ever?
-    log_warn("falling back to hardcoded list of screen resolutions");
-
-    // All resolutions should work, so we fall back to hardcoded defaults
+  int num_modes = SDL_GetNumDisplayModes(0);
+  if (num_modes <= 0)
+  {
+    // Fall back to hardcoded defaults
+    log_warn("SDL_GetNumDisplayModes failed, falling back to hardcoded list");
     video_modes.push_back(Size( 640, 480)); // 4:3, VGA
     video_modes.push_back(Size( 800, 600)); // 4:3, PAL
     video_modes.push_back(Size(1024, 768)); // Nokia N770, N800
@@ -226,9 +212,11 @@ Display::get_fullscreen_video_modes()
   }
   else
   {
-    for(int i = 0; modes[i]; ++i)
+    for (int i = 0; i < num_modes; ++i)
     {
-      video_modes.push_back(Size(modes[i]->w,  modes[i]->h));
+      SDL_DisplayMode mode;
+      if (SDL_GetDisplayMode(0, i, &mode) == 0)
+        video_modes.push_back(Size(mode.w, mode.h));
     }
   }
 

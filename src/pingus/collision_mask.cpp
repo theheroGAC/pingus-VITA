@@ -72,12 +72,14 @@ CollisionMask::init_colmap(const Surface& surf, const std::string& surface_res)
   if (sdl_surface->format->palette)
   {
     uint8_t* source = static_cast<uint8_t*>(sdl_surface->pixels);
-    if (sdl_surface->flags & SDL_SRCCOLORKEY)
+    Uint32 colorkey = 0;
+    bool has_colorkey = (SDL_GetColorKey(sdl_surface, &colorkey) == 0);
+    if (has_colorkey)
     { // surface with transparent areas
       for(int y = 0; y < height; ++y)
         for(int x = 0; x < width; ++x)
         {
-          if (source[y*pitch + x] == sdl_surface->format->colorkey)
+          if (source[y*pitch + x] == static_cast<uint8_t>(colorkey))
             buffer[y*width + x] = 0;
           else
             buffer[y*width + x] = 1;

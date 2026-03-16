@@ -9,7 +9,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 
 #include "pingus/pingus_main.hpp"
 
