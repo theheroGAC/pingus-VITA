@@ -13,6 +13,7 @@
 #define HEADER_PINGUS_PINGUS_COMPONENTS_SMALLMAP_HPP
 
 #include "engine/display/sprite.hpp"
+#include "engine/display/surface.hpp"
 #include "engine/gui/rect_component.hpp"
 
 namespace pingus {
@@ -30,52 +31,54 @@ private:
   Server*    server;
   Playfield* playfield;
 
-  /** Graphic surface of the exit */
   Sprite exit_sur;
-
-  /** Graphic surface of the entrance */
   Sprite entrance_sur;
 
   std::unique_ptr<SmallMapImage> image;
 
-  /** Indicates whether the playfield should can be scrolled around depending
-      on the position of the cursor in the small map */
   bool scroll_mode;
-
   bool has_focus;
 
   /** Pointer to the current GC, only valid inside draw() */
   DrawingContext* gc_ptr;
 
+  // Camera box drawn by compositing terrain + border pixels into a single
+  // surface that is uploaded as one texture and blitted via SDL_RenderCopy.
+  // A composite blit scales all pixels as a unit; the 1-pixel green border
+  // is never blitted independently so it is immune to the SDL fractional-
+  // scale integer-truncation that causes individual 1-pixel primitives to
+  // vanish at 0.8x scale (640x480 physical / 800x600 logical).
+  Surface      m_composite;          // CPU surface: terrain + camera border
+  Sprite       m_composite_sprite;   // GPU sprite uploaded from m_composite
+  int          m_last_view_left;
+  int          m_last_view_top;
+  unsigned int m_last_colmap_serial;
+
 public:
   SmallMap(Server*, Playfield*, const Rect& rect);
   virtual ~SmallMap();
 
-  /*{ @name Stuff called from the GUIManager */
   void on_primary_button_press(int x, int y);
   void on_primary_button_release(int x, int y);
   void on_pointer_move(int x, int y);
 
-  // Events
-  void on_pointer_enter ();
-  void on_pointer_leave ();
+  void on_pointer_enter();
+  void on_pointer_leave();
 
-  bool is_at (int x, int y);
+  bool is_at(int x, int y);
   bool mouse_over();
 
   void draw(DrawingContext& gc);
   void update(float delta);
-  /*}*/
 
-  /** draws a symbolic sprite onto the smallmap
-      @param sprite the Sprite to draw, it will keep its original size
-      @param pos the position to draw it in World COs, it will get
-      recalculated to screen CO */
   void draw_sprite(Sprite sprite, Vector3f pos);
 
 private:
-  SmallMap (const SmallMap&);
-  SmallMap& operator= (const SmallMap&);
+  /** Rebuild m_composite from the collision map and bake in the camera box. */
+  void rebuild_composite(const Rect& view_rect);
+
+  SmallMap(const SmallMap&);
+  SmallMap& operator=(const SmallMap&);
 };
 
 

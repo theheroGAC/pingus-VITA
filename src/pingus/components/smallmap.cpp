@@ -11,7 +11,11 @@
 
 #include "pingus/components/smallmap.hpp"
 
+#include <climits>
+
+#include "pingus/collision_map.hpp"
 #include "pingus/components/playfield.hpp"
+#include "pingus/groundtype.hpp"
 #include "pingus/pingu.hpp"
 #include "pingus/pingu_holder.hpp"
 #include "pingus/server.hpp"
@@ -29,10 +33,14 @@ SmallMap::SmallMap(Server* server_, Playfield* playfield_, const Rect& rect_) :
   image(),
   scroll_mode(),
   has_focus(),
-  gc_ptr(nullptr)
+  gc_ptr(nullptr),
+  m_composite(rect_.get_width(), rect_.get_height()),
+  m_composite_sprite(),
+  m_last_view_left(INT_MIN),
+  m_last_view_top(INT_MIN),
+  m_last_colmap_serial(UINT_MAX)
 {
   image = std::unique_ptr<SmallMapImage>(new SmallMapImage(server, rect.get_width(), rect.get_height()));
-
   scroll_mode = false;
 }
 
@@ -41,13 +49,86 @@ SmallMap::~SmallMap()
 }
 
 void
+SmallMap::rebuild_composite(const Rect& view_rect)
+{
+  CollisionMap* colmap = server->get_world()->get_colmap();
+
+  const int cmap_w = colmap->get_width();
+  const int cmap_h = colmap->get_height();
+  const int w      = m_composite.get_width();
+  const int h      = m_composite.get_height();
+  const int pitch  = m_composite.get_pitch();
+
+  m_composite.lock();
+  uint8_t* d = m_composite.get_data();
+
+  // Regenerate terrain pixels (same logic as SmallMapImage::update_surface).
+  // Byte order 0=R 1=G 2=B 3=A matches SmallMapImage on all platforms.
+  for (int y = 0; y < h; ++y)
+  {
+    for (int x = 0; x < w; ++x)
+    {
+      int i = y * pitch + 4 * x;
+      switch (colmap->getpixel_fast(x * cmap_w / w, y * cmap_h / h))
+      {
+        case Groundtype::GP_NOTHING:
+          d[i]=0;   d[i+1]=0;   d[i+2]=0;   d[i+3]=255; break;
+        case Groundtype::GP_BRIDGE:
+          d[i]=0;   d[i+1]=255; d[i+2]=100; d[i+3]=255; break;
+        case Groundtype::GP_SOLID:
+          d[i]=100; d[i+1]=100; d[i+2]=125; d[i+3]=255; break;
+        case Groundtype::GP_WATER:
+        case Groundtype::GP_LAVA:
+          d[i]=0;   d[i+1]=0;   d[i+2]=200; d[i+3]=255; break;
+        default:
+          d[i]=200; d[i+1]=200; d[i+2]=200; d[i+3]=255; break;
+      }
+    }
+  }
+
+  // Bake the camera box border directly into the composite surface.
+  // The border is in surface-local coordinates (origin = minimap top-left).
+  const int bx1 = view_rect.left   - rect.left;
+  const int by1 = view_rect.top    - rect.top;
+  const int bx2 = view_rect.right  - rect.left;
+  const int by2 = view_rect.bottom - rect.top;
+
+  // Top edge
+  if (by1 >= 0 && by1 < h)
+    for (int x = std::max(bx1,0); x < std::min(bx2,w); ++x)
+    { int i=by1*pitch+4*x; d[i]=0; d[i+1]=255; d[i+2]=0; d[i+3]=255; }
+
+  // Bottom edge
+  const int by_b = by2 - 1;
+  if (by_b >= 0 && by_b < h && by_b != by1)
+    for (int x = std::max(bx1,0); x < std::min(bx2,w); ++x)
+    { int i=by_b*pitch+4*x; d[i]=0; d[i+1]=255; d[i+2]=0; d[i+3]=255; }
+
+  // Left edge (skip corners)
+  if (bx1 >= 0 && bx1 < w)
+    for (int y = std::max(by1+1,0); y < std::min(by_b,h); ++y)
+    { int i=y*pitch+4*bx1; d[i]=0; d[i+1]=255; d[i+2]=0; d[i+3]=255; }
+
+  // Right edge (skip corners)
+  const int bx_r = bx2 - 1;
+  if (bx_r >= 0 && bx_r < w && bx_r != bx1)
+    for (int y = std::max(by1+1,0); y < std::min(by_b,h); ++y)
+    { int i=y*pitch+4*bx_r; d[i]=0; d[i+1]=255; d[i+2]=0; d[i+3]=255; }
+
+  m_composite.unlock();
+
+  m_composite_sprite    = Sprite(m_composite.clone());
+  m_last_view_left      = view_rect.left;
+  m_last_view_top       = view_rect.top;
+  m_last_colmap_serial  = colmap->get_serial();
+}
+
+void
 SmallMap::draw(DrawingContext& gc)
 {
-  // FIXME: This is potentially dangerous, since we don't know how
-  // long 'gc' will be alive. Should use a DrawingContext for caching.
   gc_ptr = &gc;
 
-  World* const& world  = server->get_world();
+  World* const& world = server->get_world();
 
   Vector2i of = playfield->get_pos();
   Rect view_rect;
@@ -76,23 +157,22 @@ SmallMap::draw(DrawingContext& gc)
     view_rect.bottom = rect.top + rect.get_height();
   }
 
-  gc.draw(image->get_surface(), Vector2i(rect.left, rect.top));
+  // Rebuild the composite (terrain + camera box) when camera moves or
+  // terrain changes.  The composite is blitted as one full-minimap texture,
+  // so the 1-pixel green border scales as part of the larger surface rather
+  // than being blitted independently.  Individual 1-pixel blits at fractional
+  // logical scale (0.8x at 640x480/800x600) can resolve to 0 physical pixels
+  // and vanish; embedding them in a larger blit avoids this entirely.
+  const unsigned int serial = world->get_colmap()->get_serial();
+  if (!m_composite_sprite               ||
+      view_rect.left != m_last_view_left ||
+      view_rect.top  != m_last_view_top  ||
+      serial         != m_last_colmap_serial)
+  {
+    rebuild_composite(view_rect);
+  }
 
-  // Clamp the viewport indicator to the minimap's own rect before drawing.
-  // The view_rect can legally extend beyond rect (e.g. when the camera is
-  // near the world edge), which places line endpoints outside the logical
-  // viewport.  SDL2 does NOT draw lines whose start point is off-screen, so
-  // an unclamped rect loses whatever side extends beyond the boundary.
-  // Clamping here keeps every side within the minimap area without changing
-  // the visual semantics -- a side that would be fully off-screen should not
-  // be drawn anyway.
-  Rect clamped_view_rect(
-    std::max(view_rect.left,   rect.left),
-    std::max(view_rect.top,    rect.top),
-    std::min(view_rect.right,  rect.right),
-    std::min(view_rect.bottom, rect.bottom)
-  );
-  gc.draw_rect(clamped_view_rect, Color(0, 255, 0));
+  gc.draw(m_composite_sprite, Vector2i(rect.left, rect.top));
 
   server->get_world()->draw_smallmap(this);
 
@@ -112,7 +192,7 @@ SmallMap::draw(DrawingContext& gc)
 }
 
 void
-SmallMap::update (float delta)
+SmallMap::update(float delta)
 {
   image->update(delta);
 }
@@ -128,14 +208,14 @@ SmallMap::draw_sprite(Sprite sprite, Vector3f pos)
 }
 
 bool
-SmallMap::is_at (int x, int y)
+SmallMap::is_at(int x, int y)
 {
   return (x > rect.left && x < rect.left + static_cast<int>(rect.get_width())
           && y > rect.top && y < rect.top + static_cast<int>(rect.get_height()));
 }
 
 void
-SmallMap::on_pointer_move (int x, int y)
+SmallMap::on_pointer_move(int x, int y)
 {
   int cx, cy;
   World* world = server->get_world();
@@ -143,22 +223,20 @@ SmallMap::on_pointer_move (int x, int y)
   if (scroll_mode)
   {
     cx = (x - rect.left) * static_cast<int>(world->get_width()  / rect.get_width());
-    cy = (y - rect.top) * static_cast<int>(world->get_height() / rect.get_height());
-
+    cy = (y - rect.top)  * static_cast<int>(world->get_height() / rect.get_height());
     playfield->set_viewpoint(cx, cy);
   }
 }
 
 void
-SmallMap::on_primary_button_press (int x, int y)
+SmallMap::on_primary_button_press(int x, int y)
 {
   scroll_mode = true;
 
-  // set view to the given COs
   int cx, cy;
   World* world = server->get_world();
-  cx = (x - rect.left) * int(world->get_width()) / rect.get_width();
-  cy = (y - rect.top) * int(world->get_height()) / rect.get_height();
+  cx = (x - rect.left) * int(world->get_width())  / rect.get_width();
+  cy = (y - rect.top)  * int(world->get_height()) / rect.get_height();
   playfield->set_viewpoint(cx, cy);
 }
 
@@ -169,13 +247,13 @@ SmallMap::on_primary_button_release(int /*x*/, int /*y*/)
 }
 
 void
-SmallMap::on_pointer_enter ()
+SmallMap::on_pointer_enter()
 {
   has_focus = true;
 }
 
 void
-SmallMap::on_pointer_leave ()
+SmallMap::on_pointer_leave()
 {
   has_focus = false;
 }
