@@ -19,12 +19,13 @@ namespace pingus {
 class SDLFramebuffer : public Framebuffer
 {
 private:
-  SDL_Window*  m_window;          // physical window
-  SDL_Surface* m_screen;          // window surface (owned by SDL, do not free)
-  SDL_Surface* m_logical_surface; // 800x600 offscreen render target (we own this)
+  SDL_Window*   m_window;    // physical window
+  SDL_Renderer* m_renderer;  // SDL2 hardware-accelerated renderer
   bool m_fullscreen;
   bool m_resizable;
-  std::vector<SDL_Rect> cliprect_stack;
+  // Clip rect stack in logical coordinates.
+  // SDL_RenderSetClipRect scales these itself, same as all other draw calls.
+  std::vector<Rect> cliprect_stack;
 
 public:
   SDLFramebuffer();
@@ -51,12 +52,11 @@ public:
 
   Size get_size() const;
 
-  SDL_Window*  get_window()      const override { return m_window; }
-  SDL_Surface* get_sdl_surface() const override { return m_logical_surface; }
+  SDL_Window* get_window() const override { return m_window; }
 
 private:
-  SDLFramebuffer (const SDLFramebuffer&);
-  SDLFramebuffer& operator= (const SDLFramebuffer&);
+  SDLFramebuffer(const SDLFramebuffer&);
+  SDLFramebuffer& operator=(const SDLFramebuffer&);
 };
 
 

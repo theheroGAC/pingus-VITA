@@ -77,7 +77,22 @@ SmallMap::draw(DrawingContext& gc)
   }
 
   gc.draw(image->get_surface(), Vector2i(rect.left, rect.top));
-  gc.draw_rect(view_rect, Color(0, 255, 0));
+
+  // Clamp the viewport indicator to the minimap's own rect before drawing.
+  // The view_rect can legally extend beyond rect (e.g. when the camera is
+  // near the world edge), which places line endpoints outside the logical
+  // viewport.  SDL2 does NOT draw lines whose start point is off-screen, so
+  // an unclamped rect loses whatever side extends beyond the boundary.
+  // Clamping here keeps every side within the minimap area without changing
+  // the visual semantics -- a side that would be fully off-screen should not
+  // be drawn anyway.
+  Rect clamped_view_rect(
+    std::max(view_rect.left,   rect.left),
+    std::max(view_rect.top,    rect.top),
+    std::min(view_rect.right,  rect.right),
+    std::min(view_rect.bottom, rect.bottom)
+  );
+  gc.draw_rect(clamped_view_rect, Color(0, 255, 0));
 
   server->get_world()->draw_smallmap(this);
 
