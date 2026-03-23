@@ -171,6 +171,20 @@ SurfaceBackground::draw (SceneContext& gc)
   if (start_y > 0)
     start_y = (start_y % bg_sprite.get_height()) - bg_sprite.get_height();
 
+  // Ensure the first tile's left screen edge is at or before x=0 (and
+  // equivalently for y).  When para_x < 1 the background scrolls slower than
+  // the camera: start_x = offset.x * para_x, and for a rightward-scrolled
+  // camera offset.x is negative, so start_x > offset.x.  The first tile's
+  // screen position (start_x - offset.x) is therefore positive, leaving an
+  // uncovered strip along the left edge of the viewport that widens as the
+  // camera moves further right.  The loop below pulls start_x back by one
+  // tile width at a time until the tile is guaranteed to cover screen x=0.
+  while ((start_x - offset.x) > 0)
+    start_x -= bg_sprite.get_width();
+
+  while ((start_y - offset.y) > 0)
+    start_y -= bg_sprite.get_height();
+
   for(int y = start_y;
       y < world->get_height();
       y += bg_sprite.get_height())

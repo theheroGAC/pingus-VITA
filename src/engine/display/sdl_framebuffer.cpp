@@ -51,12 +51,10 @@ SDLFramebuffer::draw_surface(const FramebufferSurface& surface, Vector2i pos)
 {
   SDLFramebufferSurfaceImpl* impl = dynamic_cast<SDLFramebufferSurfaceImpl*>(surface.get_impl());
 
-  // dst uses the original (game-visible) dimensions so positioning is correct.
-  // When the texture was downscaled (scale != 1), passing src=nullptr tells SDL
-  // to render the entire (smaller) texture stretched to fill the dst rect,
-  // reconstructing the image at the expected size.
-  SDL_Rect dst = { pos.x, pos.y, impl->get_width(), impl->get_height() };
-  SDL_RenderCopy(m_renderer, impl->get_texture(), nullptr, &dst);
+  // Delegate to the srcrect overload with a full-image source rectangle so
+  // that geometry clipping and UV precision handling are applied consistently
+  // for all draw calls regardless of which overload the caller uses.
+  draw_surface(surface, Rect(0, 0, impl->get_width(), impl->get_height()), pos);
 }
 
 void
@@ -64,26 +62,70 @@ SDLFramebuffer::draw_surface(const FramebufferSurface& surface, const Rect& srcr
 {
   SDLFramebufferSurfaceImpl* impl = dynamic_cast<SDLFramebufferSurfaceImpl*>(surface.get_impl());
 
-  const float sx = impl->get_scale_x();
-  const float sy = impl->get_scale_y();
+  float src_x = (float)srcrect.left;
+  float src_y = (float)srcrect.top;
+  float src_w = (float)srcrect.get_width();
+  float src_h = (float)srcrect.get_height();
 
-  // Translate the source rect from original coordinates to actual texture
-  // coordinates.  For most textures sx==sy==1 so this is a no-op.
-  // For downscaled textures (large worldmap backgrounds on Wii) this maps the
-  // requested region to the corresponding pixel in the smaller texture.
-  SDL_Rect src = {
-    static_cast<int>(srcrect.left  * sx),
-    static_cast<int>(srcrect.top   * sy),
-    static_cast<int>(srcrect.get_width()  * sx),
-    static_cast<int>(srcrect.get_height() * sy)
+  float dst_x = (float)pos.x;
+  float dst_y = (float)pos.y;
+  float dst_w = src_w;
+  float dst_h = src_h;
+
+  // Software-clip the destination rectangle to the logical screen bounds
+  // before submitting geometry to the renderer.
+  //
+  // On hardware renderers backed by fixed-point GPU geometry pipelines (such
+  // as the Wii's GX), passing vertex coordinates that extend far outside the
+  // physical viewport can cause arithmetic overflow in the hardware clipper,
+  // producing corrupted geometry that renders as large coloured triangles or
+  // texture-coordinate tears persisting on screen.  Desktop GPU drivers
+  // handle extreme off-screen coordinates gracefully with floating-point
+  // math, so the problem only manifests on the target hardware.
+  //
+  // The clip boundary is fixed at the logical screen extents rather than
+  // derived from the active hardware scissor rect.  Using the scissor rect
+  // would cause the software clip to change dimensions frame-to-frame during
+  // screen transitions (where the scissor rect animates), which shifts the
+  // computed source offset and produces visible background jitter.  The
+  // hardware scissor continues to handle content masking independently.
+  const float cl = 0.0f;
+  const float ct = 0.0f;
+  const float cr = (float)Display::LOGICAL_WIDTH;
+  const float cb = (float)Display::LOGICAL_HEIGHT;
+
+  if (dst_x >= cr || dst_y >= cb || dst_x + dst_w <= cl || dst_y + dst_h <= ct)
+    return;
+
+  if (dst_x < cl) { float d = cl-dst_x; src_x+=d; src_w-=d; dst_w-=d; dst_x=cl; }
+  if (dst_y < ct) { float d = ct-dst_y; src_y+=d; src_h-=d; dst_h-=d; dst_y=ct; }
+  if (dst_x+dst_w > cr) { float d=(dst_x+dst_w)-cr; src_w-=d; dst_w-=d; }
+  if (dst_y+dst_h > cb) { float d=(dst_y+dst_h)-cb; src_h-=d; dst_h-=d; }
+
+  if (src_w <= 0.0f || src_h <= 0.0f || dst_w <= 0.0f || dst_h <= 0.0f)
+    return;
+
+  // Compute UV coordinates as normalised floats derived from the original
+  // (pre-downscale) pixel dimensions.  The downscale factor sx cancels out:
+  //   u = src_x * sx / (m_width * sx) = src_x / m_width
+  // This keeps UV values continuous as src_x changes by fractional amounts,
+  // avoiding the texel-step quantisation that would occur if the source rect
+  // were first converted to integer texture-pixel coordinates via SDL_Rect.
+  // SDL_RenderGeometry forwards these float UVs directly to the GPU without
+  // further integer truncation.
+  const float iw = 1.0f / (float)impl->get_width();
+  const float ih = 1.0f / (float)impl->get_height();
+  const float u0 =  src_x        * iw,  v0 =  src_y        * ih;
+  const float u1 = (src_x+src_w) * iw,  v1 = (src_y+src_h) * ih;
+
+  SDL_Vertex verts[4] = {
+    {{dst_x,       dst_y      }, {255,255,255,255}, {u0, v0}},
+    {{dst_x+dst_w, dst_y      }, {255,255,255,255}, {u1, v0}},
+    {{dst_x+dst_w, dst_y+dst_h}, {255,255,255,255}, {u1, v1}},
+    {{dst_x,       dst_y+dst_h}, {255,255,255,255}, {u0, v1}},
   };
-  // dst keeps the original (logical) dimensions so the image renders at the
-  // correct size and position on screen.
-  SDL_Rect dst = {
-    pos.x, pos.y,
-    srcrect.get_width(), srcrect.get_height()
-  };
-  SDL_RenderCopy(m_renderer, impl->get_texture(), &src, &dst);
+  static const int idx[] = {0, 1, 2, 0, 2, 3};
+  SDL_RenderGeometry(m_renderer, impl->get_texture(), verts, 4, idx, 6);
 }
 
 void
@@ -105,16 +147,14 @@ SDLFramebuffer::draw_rect(const Rect& rect_, Color color)
     color.a < 255 ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE);
   SDL_SetRenderDrawColor(m_renderer, color.r, color.g, color.b, color.a);
 
-  // Four independent SDL_RenderDrawLine calls instead of SDL_RenderDrawLines
-  // with a 5-point closed path.
-  //
-  // With SDL_RenderDrawLines, when a point is off-screen SDL clips each
-  // segment's endpoint independently -- but the "current position" between
-  // consecutive segments does not reset.  The closing segment from pt[3] back
-  // to pt[0] therefore connects two DIFFERENT clipped edge positions, producing
-  // a stray diagonal line across the screen when the rectangle is partially
-  // outside the viewport.  Independent line calls each clip to the viewport
-  // edge cleanly with no connection artefacts between them.
+  // Use four independent line calls rather than SDL_RenderDrawLines with a
+  // five-point closed path.  SDL_RenderDrawLines clips each segment endpoint
+  // independently when a point lies off-screen, but the implicit "current
+  // position" between consecutive segments does not reset between calls.  The
+  // closing segment from the last point back to the first therefore connects
+  // two independently-clipped edge positions, producing a spurious diagonal
+  // line across the screen when the rectangle extends outside the viewport.
+  // Four separate SDL_RenderDrawLine calls each clip cleanly in isolation.
   SDL_RenderDrawLine(m_renderer, r.left,    r.top,      r.right-1, r.top);
   SDL_RenderDrawLine(m_renderer, r.left,    r.bottom-1, r.right-1, r.bottom-1);
   SDL_RenderDrawLine(m_renderer, r.left,    r.top,      r.left,    r.bottom-1);
@@ -138,11 +178,10 @@ SDLFramebuffer::flip()
 {
   SDL_RenderPresent(m_renderer);
 
-  // Clear the back buffer for the next frame.  The old surface-based pipeline
-  // implicitly cleared every frame because every pixel was overwritten by
-  // fresh blits.  With SDL_Renderer the back buffer is NOT automatically wiped
-  // between frames, so moving elements (e.g. the minimap viewport indicator)
-  // leave accumulating ghost trails without this call.
+  // Clear the back buffer after presenting so the next frame starts from a
+  // known blank state.  SDL_Renderer does not automatically clear between
+  // frames; without this, any screen region not redrawn each frame retains
+  // its previous content, causing ghost trails from moving elements.
   SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, 255);
   SDL_RenderClear(m_renderer);
 }
