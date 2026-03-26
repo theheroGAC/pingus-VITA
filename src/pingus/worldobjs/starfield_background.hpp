@@ -41,6 +41,8 @@ public:
   void update ();
   void draw (SceneContext& gc);
 
+  bool is_solid_background() const override { return true; }
+
 private:
   StarfieldBackground (const StarfieldBackground&);
   StarfieldBackground& operator= (const StarfieldBackground&);

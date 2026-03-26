@@ -12,6 +12,7 @@
 #include "util/file_reader.hpp"
 
 #include <utility>
+#include <sstream>
 
 #include "lisp/parser.hpp"
 #include "util/file_reader_impl.hpp"
@@ -219,6 +220,21 @@ FileReader
 FileReader::parse(const Pathname& pathname)
 {
   return FileReader::parse(pathname.get_sys_path());
+}
+
+FileReader
+FileReader::parse_string(const std::string& str)
+{
+  std::istringstream stream(str);
+  std::shared_ptr<lisp::Lisp> sexpr = lisp::Parser::parse(stream, "internal string");
+  if (sexpr)
+  {
+    return SExprFileReader(sexpr->get_list_elem(0));
+  }
+  else
+  {
+    return FileReader();
+  }
 }
 
 std::vector<FileReader>

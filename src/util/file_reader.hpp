@@ -77,6 +77,7 @@ public:
 
   static FileReader parse(const std::string& filename);
   static FileReader parse(const Pathname& pathname);
+  static FileReader parse_string(const std::string& str);
 
   /** Reads multiple trees from a file, for use with files that don't
       contain a root element */

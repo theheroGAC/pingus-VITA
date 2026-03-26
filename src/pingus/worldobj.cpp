@@ -58,6 +58,12 @@ WorldObj::draw_smallmap(SmallMap* /*smallmap*/)
 {
 }
 
+bool
+WorldObj::is_solid_background() const
+{
+  return false;
+}
+
 
 } // namespace pingus
 

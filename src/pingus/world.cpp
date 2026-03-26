@@ -97,6 +97,23 @@ World::init_worldobjs(const PingusLevel& plf)
     }
   }
 
+  {
+    // insert a dummy background in case the user didn't provide one
+    if (std::none_of(world_obj.begin(), world_obj.end(),
+                    [](WorldObj* obj) { return obj->is_solid_background(); }))
+    {
+      log_info("No background found, inserting dummy background");
+      FileReader reader = FileReader::parse_string("(solidcolor-background "
+                                                   "  (position 0 0 -1000) "
+                                                   "  (colori 127 0 127 255))");
+      std::vector<WorldObj*> objs = WorldObjFactory::instance().create(reader);
+      for(auto obj = objs.begin(); obj != objs.end(); ++obj)
+      {
+        add_object(*obj);
+      }
+    }
+  }
+
   world_obj.push_back(pingus);
 
   std::stable_sort (world_obj.begin (), world_obj.end (), WorldObj_less);
