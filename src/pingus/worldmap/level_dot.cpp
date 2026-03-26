@@ -20,6 +20,8 @@
 #include "pingus/savegame_manager.hpp"
 #include "pingus/screens/start_screen.hpp"
 
+#include "pingus/worldmap/worldmap.hpp"
+
 namespace pingus::worldmap {
 
 LevelDot::LevelDot(const FileReader& reader) :
@@ -41,7 +43,7 @@ void
 LevelDot::draw(DrawingContext& gc)
 {
   Vector2i mpos
-    = gc.screen_to_world(Vector2i(pingus::input::Controller::current()->get_pointer(pingus::input::STANDARD_POINTER)->get_pos()));
+    = gc.screen_to_world(Worldmap::current()->get_mouse_pos());
 
   float x = static_cast<float>(mpos.x) - pos.x;
   float y = static_cast<float>(mpos.y) - pos.y;

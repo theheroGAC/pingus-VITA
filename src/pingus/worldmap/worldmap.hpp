@@ -80,6 +80,8 @@ public:
   int get_width()  const;
   int get_height() const;
 
+  Vector2i get_mouse_pos() const { return Vector2i(mouse_x, mouse_y); }
+
   PingusWorldmap get_worldmap() const { return worldmap; }
 private:
   /** Unlock nodes according to the finished ones */
