@@ -19,8 +19,9 @@ namespace pingus {
 class SDLFramebuffer : public Framebuffer
 {
 private:
-  SDL_Window*   m_window;    // physical window
-  SDL_Renderer* m_renderer;  // SDL2 hardware-accelerated renderer
+  SDL_Window*   m_window;        // physical window
+  SDL_Renderer* m_renderer;      // SDL2 hardware-accelerated renderer
+  SDL_Texture*  m_pixel_texture; // 1x1 texture for drawing lines
   bool m_fullscreen;
   bool m_resizable;
   // Clip rect stack in logical coordinates.

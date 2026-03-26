@@ -11,15 +11,21 @@
 
 #include "engine/display/sdl_framebuffer.hpp"
 
+#include <cmath> // Required for std::fabs, std::sqrt, std::atan2, std::isfinite
 #include "engine/display/display.hpp"
 #include "engine/display/sdl_framebuffer_surface_impl.hpp"
 #include "util/log.hpp"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace pingus {
 
 SDLFramebuffer::SDLFramebuffer() :
   m_window(nullptr),
   m_renderer(nullptr),
+  m_pixel_texture(nullptr),
   m_fullscreen(false),
   m_resizable(false),
   cliprect_stack()
@@ -28,6 +34,11 @@ SDLFramebuffer::SDLFramebuffer() :
 
 SDLFramebuffer::~SDLFramebuffer()
 {
+  if (m_pixel_texture)
+  {
+    SDL_DestroyTexture(m_pixel_texture);
+    m_pixel_texture = nullptr;
+  }
   if (m_renderer)
   {
     SDL_DestroyRenderer(m_renderer);
@@ -131,10 +142,37 @@ SDLFramebuffer::draw_surface(const FramebufferSurface& surface, const Rect& srcr
 void
 SDLFramebuffer::draw_line(Vector2i pos1, Vector2i pos2, Color color)
 {
+  // The SDL_RenderDrawLine function is fundamentally broken in the SDL-OGC
+  // backend for the Wii, causing GPU crashes. We must avoid it entirely.
+  //
+  // This implementation bypasses it by drawing a 1x1 white pixel texture,
+  // stretched and rotated to form a line. This uses the texture rendering
+  // path (SDL_RenderCopyEx), which is stable on the hardware.
+
+  // Trivial reject if the line has no length
+  if (pos1.x == pos2.x && pos1.y == pos2.y) {
+    return;
+  }
+
+  float x1 = (float)pos1.x;
+  float y1 = (float)pos1.y;
+  float x2 = (float)pos2.x;
+  float y2 = (float)pos2.y;
+
+  float dx = x2 - x1;
+  float dy = y2 - y1;
+  float length = std::sqrt(dx*dx + dy*dy);
+  float angle = std::atan2(dy, dx) * (180.0f / M_PI);
+
+  SDL_Rect dst_rect = { static_cast<int>(x1), static_cast<int>(y1), static_cast<int>(length), 1 };
+  SDL_Point center = { 0, 0 }; // Rotate around the starting point of the line
+
+  SDL_SetTextureColorMod(m_pixel_texture, color.r, color.g, color.b);
+  SDL_SetTextureAlphaMod(m_pixel_texture, color.a);
   SDL_SetRenderDrawBlendMode(m_renderer,
     color.a < 255 ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE);
-  SDL_SetRenderDrawColor(m_renderer, color.r, color.g, color.b, color.a);
-  SDL_RenderDrawLine(m_renderer, pos1.x, pos1.y, pos2.x, pos2.y);
+
+  SDL_RenderCopyEx(m_renderer, m_pixel_texture, NULL, &dst_rect, angle, &center, SDL_FLIP_NONE);
 }
 
 void
@@ -143,29 +181,51 @@ SDLFramebuffer::draw_rect(const Rect& rect_, Color color)
   Rect r = rect_;
   r.normalize();
 
-  SDL_SetRenderDrawBlendMode(m_renderer,
-    color.a < 255 ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE);
-  SDL_SetRenderDrawColor(m_renderer, color.r, color.g, color.b, color.a);
-
-  // Use four independent line calls rather than SDL_RenderDrawLines with a
-  // five-point closed path.  SDL_RenderDrawLines clips each segment endpoint
+  // Route through draw_line rather than SDL_RenderDrawLines or four direct
+  // SDL_RenderDrawLine calls.  SDL_RenderDrawLines clips each segment endpoint
   // independently when a point lies off-screen, but the implicit "current
   // position" between consecutive segments does not reset between calls.  The
   // closing segment from the last point back to the first therefore connects
   // two independently-clipped edge positions, producing a spurious diagonal
   // line across the screen when the rectangle extends outside the viewport.
-  // Four separate SDL_RenderDrawLine calls each clip cleanly in isolation.
-  SDL_RenderDrawLine(m_renderer, r.left,    r.top,      r.right-1, r.top);
-  SDL_RenderDrawLine(m_renderer, r.left,    r.bottom-1, r.right-1, r.bottom-1);
-  SDL_RenderDrawLine(m_renderer, r.left,    r.top,      r.left,    r.bottom-1);
-  SDL_RenderDrawLine(m_renderer, r.right-1, r.top,      r.right-1, r.bottom-1);
+  // draw_line additionally avoids SDL_RenderDrawLine entirely, which is broken
+  // in the SDL-OGC backend and causes GPU crashes on the Wii hardware.
+  draw_line(Vector2i(r.left, r.top),    Vector2i(r.right, r.top),    color);
+  draw_line(Vector2i(r.left, r.bottom), Vector2i(r.right, r.bottom), color);
+  draw_line(Vector2i(r.left, r.top),    Vector2i(r.left, r.bottom),  color);
+  draw_line(Vector2i(r.right, r.top),   Vector2i(r.right, r.bottom), color);
 }
 
 void
 SDLFramebuffer::fill_rect(const Rect& rect_, Color color)
 {
+  // Reject corrupted geometry from physics calculations (NaN/Infinity)
+  if (!std::isfinite(rect_.left) || !std::isfinite(rect_.top) ||
+      !std::isfinite(rect_.right) || !std::isfinite(rect_.bottom))
+  {
+    return;
+  }
+
   Rect r = rect_;
   r.normalize();
+
+  // Software-clip to logical screen bounds to protect hardware rasterizers
+  const int cl = 0;
+  const int ct = 0;
+  const int cr = Display::LOGICAL_WIDTH;
+  const int cb = Display::LOGICAL_HEIGHT;
+
+  if (r.left >= cr || r.top >= cb || r.right <= cl || r.bottom <= ct)
+    return;
+
+  if (r.left < cl) r.left = cl;
+  if (r.top < ct) r.top = ct;
+  if (r.right > cr) r.right = cr;
+  if (r.bottom > cb) r.bottom = cb;
+
+  if (r.get_width() <= 0 || r.get_height() <= 0)
+    return;
+
   SDL_Rect sdl_rect = { r.left, r.top, r.get_width(), r.get_height() };
   SDL_SetRenderDrawBlendMode(m_renderer,
     color.a < 255 ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE);
@@ -229,6 +289,16 @@ SDLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resizable
     {
       log_error("Unable to create renderer: {}", SDL_GetError());
       exit(1);
+    }
+
+    // Create the 1x1 pixel texture for drawing lines
+    m_pixel_texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, 1, 1);
+    if (m_pixel_texture) {
+        Uint32 white_pixel = 0xFFFFFFFF;
+        SDL_UpdateTexture(m_pixel_texture, NULL, &white_pixel, 4);
+        SDL_SetTextureBlendMode(m_pixel_texture, SDL_BLENDMODE_BLEND);
+    } else {
+        log_error("Unable to create pixel texture: {}", SDL_GetError());
     }
 
     SDL_RenderSetLogicalSize(m_renderer,
