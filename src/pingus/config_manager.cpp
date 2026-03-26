@@ -12,6 +12,7 @@
 #include "pingus/config_manager.hpp"
 
 #include "engine/display/display.hpp"
+#include "engine/display/framebuffer.hpp"
 #include "engine/screen/screen_manager.hpp"
 #include "lisp/parser.hpp"
 #include "pingus/globals.hpp"
@@ -193,7 +194,13 @@ ConfigManager::set_mouse_grab(bool v)
   if (v != get_mouse_grab())
   {
 #ifndef __WII__
-    SDL_SetRelativeMouseMode(v ? SDL_TRUE : SDL_FALSE);
+    if (Framebuffer* fb = Display::get_framebuffer())
+    {
+      if (SDL_Window* window = fb->get_window())
+      {
+        SDL_SetWindowGrab(window, v ? SDL_TRUE : SDL_FALSE);
+      }
+    }
 #endif
     if (on_mouse_grab_change)
       on_mouse_grab_change(v);
@@ -208,7 +215,14 @@ ConfigManager::get_mouse_grab() const
 #ifdef __WII__
   return false; // No mouse grab on Wii
 #else
-  return (SDL_GetRelativeMouseMode() == SDL_TRUE);
+  if (Framebuffer* fb = Display::get_framebuffer())
+  {
+    if (SDL_Window* window = fb->get_window())
+    {
+       return (SDL_GetWindowGrab(window) == SDL_TRUE);
+    }
+  }
+  return false;
 #endif
 }
 

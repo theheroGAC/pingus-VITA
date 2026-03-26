@@ -18,6 +18,8 @@
 #include "pingus/screens/game_session.hpp"
 #include "pingus/server.hpp"
 #include "pingus/world.hpp"
+#include "pingus/config_manager.hpp"
+#include "engine/display/framebuffer.hpp"
 
 namespace pingus {
 
@@ -136,13 +138,22 @@ Playfield::update(float delta)
     }
   }
 
-  if (globals::auto_scrolling && (Display::is_fullscreen()
-#ifndef __WII__
-      || SDL_GetRelativeMouseMode() == SDL_TRUE
-#endif
-     ))
+  if (globals::auto_scrolling)
   {
-    scroll_speed = static_cast<int>(800 * delta);
+    bool mouse_in_window = true;
+#ifndef __WII__
+    if (Framebuffer* fb = Display::get_framebuffer())
+    {
+      if (SDL_Window* window = fb->get_window())
+      {
+        mouse_in_window = (SDL_GetWindowFlags(window) & SDL_WINDOW_MOUSE_FOCUS) != 0;
+      }
+    }
+#endif
+
+    if (mouse_in_window)
+    {
+      scroll_speed = static_cast<int>(800 * delta);
 
     if (mouse_pos.x < 10)
     {
@@ -160,6 +171,7 @@ Playfield::update(float delta)
     else if (mouse_pos.y > Display::get_height() - 10)
     {
       state.set_pos(state.get_pos() + Vector2i(0, scroll_speed));
+    }
     }
   }
 }
