@@ -45,9 +45,16 @@ void
 StoryDot::draw(DrawingContext& gc)
 {
   if (m_accessible)
-    gc.draw(m_story_dot, pos);
+  {
+    if (m_highlight)
+      gc.draw(m_story_dot_highlight, pos);
+    else
+      gc.draw(m_story_dot, pos);
+  }
   else
+  {
     gc.draw(m_inaccessible_dot, pos);
+  }
 }
 
 void
@@ -55,7 +62,6 @@ StoryDot::draw_hover(DrawingContext& gc)
 {
   if (m_accessible)
   {
-    gc.draw(m_story_dot_highlight, pos);
     gc.print_center(pingus::fonts::pingus_small,
                     Vector2i(static_cast<int>(pos.x),
                              static_cast<int>(pos.y) - 44),
@@ -64,7 +70,6 @@ StoryDot::draw_hover(DrawingContext& gc)
   }
   else
   {
-    gc.draw(m_inaccessible_dot, pos);
     gc.print_center(pingus::fonts::pingus_small,
                     Vector2i(static_cast<int>(pos.x),
                              static_cast<int>(pos.y) - 44),
