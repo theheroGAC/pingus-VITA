@@ -26,10 +26,11 @@
 #ifdef HAVE_OPENGL
 #include "engine/display/opengl/opengl_framebuffer.hpp"
 #include "engine/display/opengl/opengl_framebuffer_surface_impl.hpp"
+#endif
 
 namespace pingus {
 
-
+#ifdef HAVE_OPENGL
 #ifdef __WII__
 #  include <GL/gl.h>
 #else
