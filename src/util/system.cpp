@@ -18,6 +18,7 @@
 #include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <string.h>
 
 #ifdef __WII__
@@ -27,7 +28,6 @@
 #ifndef WIN32
 #  include <dirent.h>
 #  include <fcntl.h>
-#  include <fnmatch.h>
 #  include <sys/stat.h>
 #  include <sys/types.h>
 #  include <unistd.h>
@@ -115,7 +115,19 @@ System::opendir(const std::string& pathname, const std::string& pattern)
   {
     while ((de = ::readdir(dp)) != nullptr)
     {
-      if (fnmatch(pattern.c_str(), de->d_name, FNM_PATHNAME) == 0)
+      bool match = false;
+      std::string_view filename(de->d_name);
+
+      if (pattern == "*")
+      {
+        match = true;
+      }
+      else if (pattern.starts_with("*.") && filename.ends_with(pattern.substr(1)))
+      {
+        match = true;
+      }
+
+      if (match)
       {
         struct stat buf;
         stat((Pathname::join(pathname, de->d_name)).c_str (), &buf);
