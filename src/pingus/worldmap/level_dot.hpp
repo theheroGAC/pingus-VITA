@@ -39,9 +39,9 @@ public:
   PingusLevel get_plf () const { return plf; }
   void on_click();
 
-  bool finished();
-  bool accessible();
-  void unlock();
+  bool is_finished() const override;
+  bool is_accessible() const override;
+  void unlock() override;
 
 private:
   LevelDot (const LevelDot&);

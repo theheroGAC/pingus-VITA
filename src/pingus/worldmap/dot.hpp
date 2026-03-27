@@ -34,10 +34,17 @@ public:
 
   virtual void on_click() =0;
 
-  virtual bool finished() =0;
-  virtual bool accessible() =0;
+  virtual bool is_finished() const =0;
+  virtual bool is_accessible() const =0;
   /** makes the node accessible */
   virtual void unlock() =0;
+
+  bool get_highlight() const { return m_highlight; }
+  void set_highlight(bool highlight) { m_highlight = highlight; }
+
+protected:
+  bool m_highlight;
+
 private:
   Dot (const Dot&);
   Dot& operator= (const Dot&);

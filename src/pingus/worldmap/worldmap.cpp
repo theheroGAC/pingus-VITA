@@ -36,9 +36,7 @@ Worldmap::Worldmap(const Pathname& filename) :
   pingus(),
   gc_state(),
   path_graph(),
-  drawables(),
-  mouse_x(0),
-  mouse_y(0)
+  drawables()
 {
   current_ = this;
 
@@ -118,10 +116,11 @@ Worldmap::draw(DrawingContext& gc)
   for (auto& drawable : drawables)
     drawable->draw(gc);
 
-  Vector2f mpos = gc_state.screen2world(Vector2i(mouse_x, mouse_y));
-  Dot* dot = path_graph->get_dot(mpos.x, mpos.y);
-  if (dot)
-    dot->draw_hover(gc);
+  for(Dot* dot : path_graph->dots) {
+    if (dot->get_highlight()) {
+      dot->draw_hover(gc);
+    }
+  }
 
   gc_state.pop(gc);
 }
@@ -151,8 +150,12 @@ Worldmap::add_drawable(std::unique_ptr<Drawable> drawable)
 void
 Worldmap::on_pointer_move(int x, int y)
 {
-  mouse_x = x;
-  mouse_y = y;
+  Vector2f const mpos = gc_state.screen2world(Vector2i(x, y));
+  Dot* const hover_dot = path_graph->get_dot(mpos.x, mpos.y);
+
+  for(Dot* dot : path_graph->dots) {
+    dot->set_highlight(dot == hover_dot);
+  }
 }
 
 void
@@ -188,7 +191,7 @@ Worldmap::on_primary_button_press(int x, int y)
     }
     else
     {
-      if (dot->accessible())
+      if (dot->is_accessible())
       {
         if (!pingus->walk_to_node(path_graph->lookup_node(dot->get_name())))
         {
@@ -255,7 +258,7 @@ struct unlock_nodes
 
   void operator()(Node<Dot*>& node)
   {
-    if (node.data->finished())
+    if (node.data->is_finished())
     {
       //log_info("Unlocking neightbours of: {}", (void*)node.data);
       for (std::vector<EdgeId>::iterator i = node.next.begin(); i != node.next.end(); ++i)

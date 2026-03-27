@@ -47,9 +47,6 @@ private:
   /** A collection of drawable things */
   std::vector<std::unique_ptr<Drawable>> drawables;
 
-  int mouse_x;
-  int mouse_y;
-
 public:
   /** Load the given*/
   Worldmap(const Pathname& filename);
@@ -79,8 +76,6 @@ public:
 
   int get_width()  const;
   int get_height() const;
-
-  Vector2i get_mouse_pos() const { return Vector2i(mouse_x, mouse_y); }
 
   PingusWorldmap get_worldmap() const { return worldmap; }
 private:

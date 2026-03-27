@@ -42,16 +42,7 @@ LevelDot::LevelDot(const FileReader& reader) :
 void
 LevelDot::draw(DrawingContext& gc)
 {
-  Vector2i mpos
-    = gc.screen_to_world(Worldmap::current()->get_mouse_pos());
-
-  float x = static_cast<float>(mpos.x) - pos.x;
-  float y = static_cast<float>(mpos.y) - pos.y;
-
-  bool highlight = false;
-
-  if (std::sqrt(x*x + y*y) < 30.0f)
-    highlight = true;
+  bool highlight = m_highlight;
 
   Savegame* savegame = SavegameManager::instance()->get(plf.get_resname());
   if (savegame
@@ -92,7 +83,7 @@ LevelDot::on_click()
 }
 
 bool
-LevelDot::finished()
+LevelDot::is_finished() const
 {
   Savegame* savegame = SavegameManager::instance()->get(plf.get_resname());
   if (savegame && savegame->get_status() == Savegame::FINISHED)
@@ -102,7 +93,7 @@ LevelDot::finished()
 }
 
 bool
-LevelDot::accessible()
+LevelDot::is_accessible() const
 {
   Savegame* savegame = SavegameManager::instance()->get(plf.get_resname());
   if (savegame && savegame->get_status() != Savegame::NONE)
@@ -114,7 +105,7 @@ LevelDot::accessible()
 void
 LevelDot::draw_hover(DrawingContext& gc)
 {
-  if (accessible())
+  if (is_accessible())
   {
     gc.print_center(pingus::fonts::pingus_small,
                     Vector2i(static_cast<int>(pos.x),

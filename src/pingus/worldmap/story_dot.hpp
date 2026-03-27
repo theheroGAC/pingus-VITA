@@ -43,9 +43,9 @@ public:
   void update(float delta);
   void on_click();
 
-  bool finished() { return false; }
-  bool accessible() { return m_accessible; }
-  void unlock() { m_accessible = true; }
+  bool is_finished() const override { return false; }
+  bool is_accessible() const override { return m_accessible; }
+  void unlock() override { m_accessible = true; }
   void check_auto_play();
 
 private:

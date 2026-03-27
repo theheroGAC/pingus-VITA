@@ -16,7 +16,8 @@ namespace pingus::worldmap {
 
 Dot::Dot(const FileReader& reader) :
   Drawable(),
-  pos()
+  pos(),
+  m_highlight(false)
 {
   reader.read_vector("position", pos);
   reader.read_string("name",     name);

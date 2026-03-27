@@ -20,6 +20,7 @@
 #include "engine/input/event.hpp"
 #include "math/math.hpp"
 #include "math/vector2f.hpp"
+#include "math/size.hpp"
 #include "util/log.hpp"
 
 namespace pingus::input {
@@ -185,14 +186,19 @@ class Pointer : public Control
 {
 protected:
   Vector2f pos;
+  Size m_limits;
 
 public:
   Pointer(Control* parent_) :
     Control(parent_),
-    pos()
+    pos(),
+    m_limits(800, 600)
   {}
 
   Vector2f get_pos() const { return pos; }
+
+  void set_limits(const Size& limits) { m_limits = limits; }
+  Size get_limits() const { return m_limits; }
 
   void set_pos(const Vector2f& new_pos) {
     if (pos != new_pos)

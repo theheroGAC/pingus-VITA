@@ -13,7 +13,6 @@
 
 #include <algorithm>
 
-#include "engine/display/display.hpp"
 #include "engine/input/manager.hpp"
 #include "util/log.hpp"
 
@@ -69,9 +68,8 @@ public:
     new_pos.x += x_axis->get_pos() * c_speed * delta;
     new_pos.y += y_axis->get_pos() * c_speed * delta;
 
-    // FIXME: shouldn't depend on Display
-    new_pos.x = std::clamp(new_pos.x, 0.0f, static_cast<float>(Display::get_width()));
-    new_pos.y = std::clamp(new_pos.y, 0.0f, static_cast<float>(Display::get_height()));
+    new_pos.x = std::clamp(new_pos.x, 0.0f, static_cast<float>(m_limits.width));
+    new_pos.y = std::clamp(new_pos.y, 0.0f, static_cast<float>(m_limits.height));
 
     if (new_pos != pos)
     {
