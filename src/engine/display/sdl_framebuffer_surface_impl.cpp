@@ -70,7 +70,70 @@ SDLFramebufferSurfaceImpl::SDLFramebufferSurfaceImpl(SDL_Renderer* renderer, SDL
     }
   }
 
-  m_texture = SDL_CreateTextureFromSurface(renderer, upload);
+  // Determine if we need to apply alpha bleeding to prevent dark fringes
+  // during bilinear filtering (scaling).
+  Uint32 colorkey_val = 0;
+  const bool has_colorkey = (SDL_GetColorKey(src, &colorkey_val) == 0);
+  const bool has_alpha    = (src->format->Amask != 0) || has_colorkey;
+
+  if (has_alpha)
+  {
+    // Convert to a temporary 32-bit RGBA surface for bleeding. This ensures we
+    // have a known pixel format (4 bpp) and can safely manipulate RGB values
+    // of fully transparent pixels.
+    SDL_Surface* bled = SDL_CreateRGBSurfaceWithFormat(0, upload->w, upload->h, 32, SDL_PIXELFORMAT_RGBA32);
+    if (bled)
+    {
+      SDL_SetSurfaceBlendMode(upload, SDL_BLENDMODE_NONE);
+      SDL_BlitSurface(upload, nullptr, bled, nullptr);
+
+      // Alpha bleed: fill transparent pixels with the colour of their nearest
+      // opaque neighbour. Colorkey blits leave transparent pixels as (0,0,0,0),
+      // so bilinear filtering at non-native scales blends opaque content with
+      // transparent black, producing a dark fringe along every transparency
+      // boundary and bleeding adjacent frames in sprite sheets.
+      // Four axis-aligned passes propagate opaque colours into all transparent
+      // regions in O(w*h) time without allocating additional memory.
+      SDL_LockSurface(bled);
+      Uint8* px    = static_cast<Uint8*>(bled->pixels);
+      int    bpp   = bled->format->BytesPerPixel;
+      int    pitch = bled->pitch;
+
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+      int    a_off = 3 - (bled->format->Ashift / 8);
+#else
+      int    a_off = bled->format->Ashift / 8;
+#endif
+
+      auto get_alpha = [&](int x, int y) -> Uint8 {
+        return px[y * pitch + x * bpp + a_off];
+      };
+      auto copy_rgb = [&](int dx, int dy, int sx, int sy) {
+        Uint8*       d = px + dy * pitch + dx * bpp;
+        const Uint8* s = px + sy * pitch + sx * bpp;
+        for (int b = 0; b < bpp; ++b)
+          if (b != a_off) d[b] = s[b];
+      };
+
+      int W = bled->w;
+      int H = bled->h;
+
+      for (int ty = 1;   ty < H;  ++ty) for (int tx = 0;   tx < W;  ++tx) if (get_alpha(tx,ty)==0 && get_alpha(tx,ty-1)>0) copy_rgb(tx,ty,tx,ty-1); // top-down
+      for (int ty = H-2; ty >= 0; --ty) for (int tx = 0;   tx < W;  ++tx) if (get_alpha(tx,ty)==0 && get_alpha(tx,ty+1)>0) copy_rgb(tx,ty,tx,ty+1); // bottom-up
+      for (int ty = 0;   ty < H;  ++ty) for (int tx = 1;   tx < W;  ++tx) if (get_alpha(tx,ty)==0 && get_alpha(tx-1,ty)>0) copy_rgb(tx,ty,tx-1,ty); // left-right
+      for (int ty = 0;   ty < H;  ++ty) for (int tx = W-2; tx >= 0; --tx) if (get_alpha(tx,ty)==0 && get_alpha(tx+1,ty)>0) copy_rgb(tx,ty,tx+1,ty); // right-left
+
+      SDL_UnlockSurface(bled);
+      m_texture = SDL_CreateTextureFromSurface(renderer, bled);
+      SDL_FreeSurface(bled);
+    }
+  }
+
+  // Fallback if bleeding was skipped or failed
+  if (!m_texture)
+  {
+    m_texture = SDL_CreateTextureFromSurface(renderer, upload);
+  }
 
   if (scaled)
     SDL_FreeSurface(scaled);
@@ -81,11 +144,6 @@ SDLFramebufferSurfaceImpl::SDLFramebufferSurfaceImpl(SDL_Renderer* renderer, SDL
       std::string("SDLFramebufferSurfaceImpl: SDL_CreateTextureFromSurface failed: ") +
       SDL_GetError());
   }
-
-  // Enable blending only for surfaces that actually carry transparency data.
-  Uint32 colorkey_val = 0;
-  const bool has_colorkey = (SDL_GetColorKey(src, &colorkey_val) == 0);
-  const bool has_alpha    = (src->format->Amask != 0) || has_colorkey;
 
   if (has_alpha)
     SDL_SetTextureBlendMode(m_texture, SDL_BLENDMODE_BLEND);

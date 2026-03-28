@@ -124,10 +124,31 @@ SDLFramebuffer::draw_surface(const FramebufferSurface& surface, const Rect& srcr
   // were first converted to integer texture-pixel coordinates via SDL_Rect.
   // SDL_RenderGeometry forwards these float UVs directly to the GPU without
   // further integer truncation.
+  //
+  // Apply a 0.5-texel inset on all four sides of the source rect.  This is
+  // the same technique used by the OpenGL backend (see opengl_framebuffer.cpp)
+  // and is necessary for two reasons:
+  //
+  //  1. Sprite sheets – each animation frame occupies a sub-rectangle of the
+  //     texture.  Without an inset, bilinear filtering at the frame edge can
+  //     sample 0.5 texels past the boundary into an adjacent frame.  The
+  //     alpha-bleed preprocessing (sdl_framebuffer_surface_impl.cpp) fills
+  //     those boundary texels with the nearest opaque colour of the *current*
+  //     frame, but the 4-axis-aligned passes can also propagate colour from a
+  //     neighbouring frame into the boundary texel of the current frame.  The
+  //     inset ensures the GPU never reaches that contaminated texel.
+  //
+  //  2. Tiled backgrounds – when the same surface is drawn in a grid (e.g.
+  //     SurfaceBackground), the edge texels of a tile are sampled at UV ≈ 1.
+  //     On some SDL/GPU backends bilinear interpolation at the exact texture
+  //     edge blends with the border colour (often transparent black), producing
+  //     a dark fringe at every tile seam.  The inset keeps the sample point
+  //     at the edge texel's centre, where the alpha-bled colour is guaranteed
+  //     correct regardless of the border-colour mode.
   const float iw = 1.0f / (float)impl->get_width();
   const float ih = 1.0f / (float)impl->get_height();
-  const float u0 =  src_x        * iw,  v0 =  src_y        * ih;
-  const float u1 = (src_x+src_w) * iw,  v1 = (src_y+src_h) * ih;
+  const float u0 = (src_x        + 0.5f) * iw,  v0 = (src_y        + 0.5f) * ih;
+  const float u1 = (src_x+src_w  - 0.5f) * iw,  v1 = (src_y+src_h  - 0.5f) * ih;
 
   SDL_Vertex verts[4] = {
     {{dst_x,       dst_y      }, {255,255,255,255}, {u0, v0}},
