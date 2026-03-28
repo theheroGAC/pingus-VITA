@@ -41,8 +41,9 @@ private:
   bool     finished;
 
   /** Current frame */
-  int frame;
-  int tick_count;
+  int      frame;
+  int      tick_count;
+  int      total_time;
 
 public:
   SpriteImpl();

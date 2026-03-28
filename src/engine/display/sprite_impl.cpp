@@ -77,7 +77,8 @@ SpriteImpl::SpriteImpl() :
   loop_last_cycle(),
   finished(),
   frame(),
-  tick_count()
+  tick_count(),
+  total_time()
 {
 }
 
@@ -93,7 +94,8 @@ SpriteImpl::SpriteImpl(const SpriteDescription& desc, ResourceModifier::Enum mod
   loop_last_cycle(),
   finished(false),
   frame(0),
-  tick_count(0)
+  tick_count(0),
+  total_time(0)
 {
   framebuffer_surface = load_framebuffer_surface(desc.filename, mod);
 
@@ -111,6 +113,7 @@ SpriteImpl::SpriteImpl(const SpriteDescription& desc, ResourceModifier::Enum mod
 
   offset = calc_origin(desc.origin, frame_size) - desc.offset;
 
+  total_time = frame_delay * (array.width * array.height);
 }
 
 SpriteImpl::SpriteImpl(const Surface& surface) :
@@ -125,7 +128,9 @@ SpriteImpl::SpriteImpl(const Surface& surface) :
   loop_last_cycle(false),
   finished(false),
   frame(0),
-  tick_count(0)
+  tick_count(0),
+  total_time(0)
+/* total_time is 0 for static surfaces as frame_delay is 0 */
 {
 }
 
@@ -139,7 +144,6 @@ SpriteImpl::update(float delta)
   if (finished || frame_delay == 0)
     return;
 
-  int total_time = frame_delay * (array.width * array.height);
   tick_count += int(delta * 1000.0f);
   if (tick_count >= total_time)
   {
