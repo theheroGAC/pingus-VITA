@@ -220,12 +220,14 @@ SDLFramebuffer::draw_rect(const Rect& rect_, Color color)
 void
 SDLFramebuffer::fill_rect(const Rect& rect_, Color color)
 {
+#ifndef NDEBUG
   // Reject corrupted geometry from physics calculations (NaN/Infinity)
   if (!std::isfinite(rect_.left) || !std::isfinite(rect_.top) ||
       !std::isfinite(rect_.right) || !std::isfinite(rect_.bottom))
   {
     return;
   }
+#endif
 
   Rect r = rect_;
   r.normalize();
