@@ -36,6 +36,8 @@ public:
   virtual void update (const input::Event& event) override;
   virtual void update (float) override;
 
+  virtual void on_startup() override;
+
   virtual void on_pause_press () {}
   virtual void on_single_step_press () {}
   virtual void on_fast_forward_press () {}

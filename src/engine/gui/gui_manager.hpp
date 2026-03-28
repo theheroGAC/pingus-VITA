@@ -42,6 +42,8 @@ public:
   virtual void update(float delta);
   virtual void update(const ::pingus::input::Event &event);
 
+  void set_mouse_pos(const Vector2i& pos);
+
 private:
   GUIManager (const GUIManager&);
   GUIManager& operator= (const GUIManager&);

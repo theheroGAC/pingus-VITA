@@ -13,6 +13,7 @@
 
 #include "engine/display/display.hpp"
 #include "engine/gui/gui_manager.hpp"
+#include "engine/screen/screen_manager.hpp"
 #include "pingus/globals.hpp"
 #include "util/log.hpp"
 
@@ -42,6 +43,13 @@ void
 GUIScreen::update(float delta)
 {
   gui_manager->update(delta);
+}
+
+void
+GUIScreen::on_startup()
+{
+  gui_manager->on_pointer_leave();
+  gui_manager->set_mouse_pos(ScreenManager::instance()->get_mouse_pos());
 }
 
 void

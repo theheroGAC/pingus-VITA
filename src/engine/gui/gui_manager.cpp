@@ -95,6 +95,13 @@ GUIManager::update(const pingus::input::Event& event)
   }
 }
 
+void
+GUIManager::set_mouse_pos(const Vector2i& pos)
+{
+  mouse_pos = pos;
+  on_pointer_move(mouse_pos.x, mouse_pos.y);
+}
+
 } // namespace pingus::gui
 
 // EOF

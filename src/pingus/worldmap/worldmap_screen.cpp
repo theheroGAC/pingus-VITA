@@ -152,6 +152,7 @@ WorldmapScreen::load(const Pathname& filename)
 void
 WorldmapScreen::on_startup ()
 {
+  GUIScreen::on_startup();
   exit_worldmap = false;
   pingus::sound::PingusSound::stop_music();
 

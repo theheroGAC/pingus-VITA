@@ -255,15 +255,16 @@ GroupComponent::on_pointer_enter()
 void
 GroupComponent::on_pointer_leave()
 {
-  if (!grabbed_comp)
+  if (mouse_over_comp)
   {
-    if (mouse_over_comp)
-    {
-      mouse_over_comp->set_mouse_over(false);
-      mouse_over_comp->on_pointer_leave();
-    }
-    mouse_over_comp = nullptr;
+    mouse_over_comp->set_mouse_over(false);
+    mouse_over_comp->on_pointer_leave();
   }
+  mouse_over_comp = nullptr;
+
+  grabbed_comp = nullptr;
+  primary_pressed_comp = nullptr;
+  secondary_pressed_comp = nullptr;
 }
 
 void
