@@ -40,6 +40,10 @@ private:
   char* allocate(size_t size)
   {
     assert(size <= chunk_size);
+    if (size > chunk_size)
+    {
+      return nullptr;
+    }
 
     // Check if current chunk has enough space
     if (current_chunk_index < chunks.size() &&
