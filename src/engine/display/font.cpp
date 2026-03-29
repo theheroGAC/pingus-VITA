@@ -12,7 +12,6 @@
 #include "engine/display/font.hpp"
 
 #include <algorithm>
-#include <map>
 #include <vector>
 
 #include "engine/display/display.hpp"
@@ -63,6 +62,11 @@ public:
   float  char_spacing;
   float  vertical_spacing;
   int    size;
+#ifdef HAVE_OPENGL
+  // Cached across render_line_opengl calls to avoid per-frame heap churn.
+  // Vertex data is cleared each call; capacity is retained.
+  std::vector<GlyphBatch> m_batches;
+#endif
 
   FontImpl(const FontDescription& desc) :
     framebuffer_surfaces(),
@@ -188,8 +192,23 @@ public:
     int base_x = x - offset.x;
     int base_y = y - offset.y;
 
-    std::map<GLuint, GlyphBatch> batches;
+    // Clear vertex data from last call but keep allocated capacity.
+    // m_batches itself is a member so texture slots survive across calls.
+    for (auto& b : m_batches)
+      b.vertices.clear();
+
     float dstx = 0.0f;
+
+    // Returns the batch for handle, creating a slot if this texture hasn't
+    // been seen before on this font.  n is always tiny (1-4 atlas textures)
+    // so a linear scan beats std::map's heap-allocated tree nodes.
+    auto get_batch = [&](GLuint handle) -> GlyphBatch& {
+      for (auto& b : m_batches)
+        if (b.texture_id == handle)
+          return b;
+      m_batches.emplace_back(handle);
+      return m_batches.back();
+    };
 
     UTF8::iterator i(text);
     while(i.next())
@@ -221,13 +240,7 @@ public:
               glyph.rect.top >= tile.rect.top &&
               glyph.rect.bottom <= tile.rect.bottom)
           {
-            auto [batch_it, inserted] = batches.emplace(
-              std::piecewise_construct,
-              std::forward_as_tuple(tile.handle),
-              std::forward_as_tuple(tile.handle));
-            (void)inserted;
-
-            GlyphBatch& batch = batch_it->second;
+            GlyphBatch& batch = get_batch(tile.handle);
 
             float glyph_left_in_tile = static_cast<float>(glyph.rect.left - tile.rect.left);
             float glyph_top_in_tile = static_cast<float>(glyph.rect.top - tile.rect.top);
@@ -255,22 +268,17 @@ public:
       }
     }
 
-    if (!batches.empty())
+    for (auto& batch : m_batches)
     {
-      for (auto& batch_pair : batches)
-      {
-        GlyphBatch& batch = batch_pair.second;
+      if (batch.vertices.empty())
+        continue;
 
-        if (batch.vertices.empty())
-          continue;
+      glBindTexture(GL_TEXTURE_2D, batch.texture_id);
 
-        glBindTexture(GL_TEXTURE_2D, batch.texture_id);
+      glVertexPointer(2, GL_FLOAT, sizeof(GlyphVertex), &batch.vertices[0].x);
+      glTexCoordPointer(2, GL_FLOAT, sizeof(GlyphVertex), &batch.vertices[0].u);
 
-        glVertexPointer(2, GL_FLOAT, sizeof(GlyphVertex), &batch.vertices[0].x);
-        glTexCoordPointer(2, GL_FLOAT, sizeof(GlyphVertex), &batch.vertices[0].u);
-
-        glDrawArrays(GL_QUADS, 0, batch.vertices.size());
-      }
+      glDrawArrays(GL_QUADS, 0, batch.vertices.size());
     }
 
     gl_fb->invalidate_state();
