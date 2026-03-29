@@ -38,7 +38,6 @@ public:
 
   bool read_int(const char* name, int& v) const
   {
-    std::vector<std::string> lst = get_section_names();
     if (m_overrides.read_int(name, v))
     {
       return true;

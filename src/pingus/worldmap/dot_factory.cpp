@@ -33,7 +33,6 @@ DotFactory::create(const FileReader& reader)
   else
   {
     throw std::runtime_error(std::format("DotFactory: unknown tag: {}", reader.get_name()));
-    return {};
   }
 }
 
