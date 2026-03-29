@@ -13,7 +13,6 @@
 #define HEADER_PINGUS_PINGUS_PLF_RES_MGR_HPP
 
 #include "pingus/pingus_level.hpp"
-#include <SDL2/SDL.h>
 
 namespace pingus {
 
@@ -40,7 +39,7 @@ private:
   static PingusLevel load_plf_raw(const std::string& res_name,
                                   const Pathname& pathname);
 public:
-  /** @returns a handle to the PLF, which the caller *must not* delete
+  /** @returns a copy of the cached PingusLevel for the given resource name.
 
       @param res_name The resource name of the level, aka "snow11-grumbel"
   */

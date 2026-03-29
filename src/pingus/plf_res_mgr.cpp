@@ -40,9 +40,6 @@ PLFResMgr::load_plf_raw(const std::string& res_name,
 
     plf_map[res_name]  = entry;
 
-    // FIXME: leaking pointers to the outsite work is not such a good
-    // idea, could lead to trouble sooner or later
-
     return PingusLevel (entry.plf);
   }
   else
@@ -61,8 +58,6 @@ PLFResMgr::load_plf_raw(const std::string& res_name,
 
       plf_map[res_name]  = entry;
 
-      // FIXME: leaking pointers to the outsite work is not such a good
-      // idea, could lead to trouble sooner or later
       return PingusLevel (entry.plf);
     }
     else
