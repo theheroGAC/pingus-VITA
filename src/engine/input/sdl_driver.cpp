@@ -392,7 +392,7 @@ SDLDriver::update(float delta)
         {WPAD_BUTTON_HOME, 6},
     };
 
-    for (auto &bm : bmap)
+    for (const auto &bm : bmap)
     {
       if (buttons_down & bm.wpad_btn)
       {
