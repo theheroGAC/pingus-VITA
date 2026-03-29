@@ -131,7 +131,7 @@ OpenGLFramebufferSurfaceImpl::OpenGLFramebufferSurfaceImpl(SDL_Surface* src) :
       if (has_alpha && convert->format->BytesPerPixel == 4) {
         SDL_LockSurface(convert);
         Uint8* px    = static_cast<Uint8*>(convert->pixels);
-        int    bpp   = convert->format->BytesPerPixel;
+        constexpr int bytes_per_pixel = 4; // guaranteed by the enclosing if condition
         int    pitch = convert->pitch;
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
@@ -141,12 +141,12 @@ OpenGLFramebufferSurfaceImpl::OpenGLFramebufferSurfaceImpl(SDL_Surface* src) :
 #endif
 
         auto get_alpha = [&](int x, int y) -> Uint8 {
-          return px[y * pitch + x * bpp + a_off];
+          return px[y * pitch + x * bytes_per_pixel + a_off];
         };
         auto copy_rgb = [&](int dx, int dy, int sx, int sy) {
-          Uint8*       d = px + dy * pitch + dx * bpp;
-          const Uint8* s = px + sy * pitch + sx * bpp;
-          for (int b = 0; b < bpp; ++b)
+          Uint8*       d = px + dy * pitch + dx * bytes_per_pixel;
+          const Uint8* s = px + sy * pitch + sx * bytes_per_pixel;
+          for (int b = 0; b < bytes_per_pixel; ++b)
             if (b != a_off) d[b] = s[b];
         };
 
