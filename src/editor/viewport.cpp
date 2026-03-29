@@ -547,17 +547,14 @@ Viewport::update(float delta)
   if (autoscroll)
   {
     const int autoscroll_border = 10;
-    if (autoscroll)
-    {
-      if (mouse_screen_pos.x < autoscroll_border)
-        state.set_pos(state.get_pos() - Vector2i(5, 0));
-      else if (Display::get_width() - mouse_screen_pos.x < autoscroll_border)
-        state.set_pos(state.get_pos() + Vector2i(5, 0));
-      else if (mouse_screen_pos.y < autoscroll_border)
-        state.set_pos(state.get_pos() - Vector2i(0, 5));
-      else if (Display::get_height() - mouse_screen_pos.y < autoscroll_border)
-        state.set_pos(state.get_pos() + Vector2i(0, 5));
-    }
+    if (mouse_screen_pos.x < autoscroll_border)
+      state.set_pos(state.get_pos() - Vector2i(5, 0));
+    else if (Display::get_width() - mouse_screen_pos.x < autoscroll_border)
+      state.set_pos(state.get_pos() + Vector2i(5, 0));
+    else if (mouse_screen_pos.y < autoscroll_border)
+      state.set_pos(state.get_pos() - Vector2i(0, 5));
+    else if (Display::get_height() - mouse_screen_pos.y < autoscroll_border)
+      state.set_pos(state.get_pos() + Vector2i(0, 5));
   }
 }
 
