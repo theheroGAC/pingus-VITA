@@ -221,12 +221,11 @@ public:
               glyph.rect.top >= tile.rect.top &&
               glyph.rect.bottom <= tile.rect.bottom)
           {
-            auto batch_it = batches.find(tile.handle);
-            if (batch_it == batches.end())
-            {
-              batches.insert(std::make_pair(tile.handle, GlyphBatch(tile.handle)));
-              batch_it = batches.find(tile.handle);
-            }
+            auto [batch_it, inserted] = batches.emplace(
+              std::piecewise_construct,
+              std::forward_as_tuple(tile.handle),
+              std::forward_as_tuple(tile.handle));
+            (void)inserted;
 
             GlyphBatch& batch = batch_it->second;
 
