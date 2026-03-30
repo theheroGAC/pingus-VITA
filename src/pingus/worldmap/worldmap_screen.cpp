@@ -41,51 +41,6 @@ private:
   WorldmapScreenCloseButton & operator=(const WorldmapScreenCloseButton&);
 };
 
-class WorldmapScreenCreditsButton
-  : public pingus::gui::SurfaceButton
-{
-private:
-  WorldmapScreen* worldmap_screen;
-public:
-  WorldmapScreenCreditsButton(WorldmapScreen* worldmap_screen);
-  void on_click();
-  void draw (DrawingContext& gc);
-  void on_pointer_enter();
-
-private:
-  WorldmapScreenCreditsButton(const WorldmapScreenCreditsButton&);
-  WorldmapScreenCreditsButton & operator=(const WorldmapScreenCreditsButton&);
-};
-
-WorldmapScreenCreditsButton::WorldmapScreenCreditsButton(WorldmapScreen* worldmap_screen_) :
-  pingus::gui::SurfaceButton(Display::get_width() - 150, 0,
-                     "core/worldmap/credits_button_normal",
-                     "core/worldmap/credits_button_pressed",
-                     "core/worldmap/credits_button_hover"),
-  worldmap_screen(worldmap_screen_)
-{
-}
-
-void
-WorldmapScreenCreditsButton::on_pointer_enter()
-{
-  SurfaceButton::on_pointer_enter();
-  pingus::sound::PingusSound::play_sound ("tick");
-}
-
-void
-WorldmapScreenCreditsButton::draw (DrawingContext& gc)
-{
-  SurfaceButton::draw(gc);
-  gc.print_center(pingus::fonts::chalk_small, Vector2i(Display::get_width() - 59 - 24, 2), "Show Ending?");
-}
-
-void
-WorldmapScreenCreditsButton::on_click()
-{
-  worldmap_screen->show_end_story();
-}
-
 WorldmapScreenCloseButton::WorldmapScreenCloseButton(WorldmapScreen* worldmap_screen_) :
   pingus::gui::SurfaceButton(0, Display::get_height() - 37,
                      "core/worldmap/leave_button_normal",
@@ -122,7 +77,6 @@ WorldmapScreen::WorldmapScreen() :
   worldmap(),
   new_worldmap(),
   close_button(),
-  credits_button(),
   m_worldmap_component()
 {
   // FIXME: a bit ugly because of the proteced member, but should work
@@ -140,13 +94,6 @@ void
 WorldmapScreen::load(const Pathname& filename)
 {
   worldmap = std::unique_ptr<Worldmap>(new Worldmap(filename));
-
-  bool credits_unlocked = false;
-  //StatManager::instance()->get_bool(worldmap->get_short_name() + "-endstory-seen", credits_unlocked);
-  if (credits_unlocked)
-  {
-    gui_manager->create<WorldmapScreenCreditsButton>(this);
-  }
 }
 
 void

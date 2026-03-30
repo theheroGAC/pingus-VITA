@@ -43,7 +43,6 @@ private:
   std::unique_ptr<Worldmap> new_worldmap;
 
   ::pingus::gui::SurfaceButton *close_button;
-  ::pingus::gui::SurfaceButton *credits_button;
   WorldmapComponent* m_worldmap_component;
 
 public:
