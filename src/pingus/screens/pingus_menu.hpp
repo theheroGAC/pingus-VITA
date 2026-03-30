@@ -48,6 +48,7 @@ private:
 #endif
   MenuButton* contrib_button;
   MenuButton* options_button;
+  MenuButton* credits_button;
 
   void show_credits();
 

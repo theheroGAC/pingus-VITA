@@ -42,7 +42,8 @@ PingusMenu::PingusMenu() :
   editor_button(),
 #endif
   contrib_button(),
-  options_button()
+  options_button(),
+  credits_button()
 {
   is_init = false;
 
@@ -54,6 +55,7 @@ PingusMenu::PingusMenu() :
   options_button = gui_manager->create<MenuButton>(this, Vector2i(0, 0), "Options", "..:: Configure the game ::..");
   contrib_button = gui_manager->create<MenuButton>(this, Vector2i(0, 0), "Levelsets", "..:: Play User Built levels ::..");
   start_button = gui_manager->create<MenuButton>(this, Vector2i(0, 0), "Story", "..:: Start the game ::..");
+  credits_button = gui_manager->create<MenuButton>(this, Vector2i(0, 0), "Credits", "..:: Meet the penguins behind the penguins ::..");
 #ifndef DISABLE_EDITOR
   editor_button = gui_manager->create<MenuButton>(this, Vector2i(0, 0), "Editor", "..:: Create your own levels ::..");
 #endif
@@ -77,31 +79,35 @@ PingusMenu::~PingusMenu()
 void
 PingusMenu::layout_buttons(const Size& size)
 {
-  // Define Layout Constants
   const int center_x = size.width / 2;
   const int center_y = size.height / 2;
   const int x_offset = 125;
+  const int row_spacing = 70;
 
-  // Define the 5 logical slots for the menu grid
-  const Vector2i slot_tl(center_x - x_offset, center_y - 20);
-  const Vector2i slot_tr(center_x + x_offset, center_y - 20);
-  const Vector2i slot_bl(center_x - x_offset, center_y + 50);
-  const Vector2i slot_br(center_x + x_offset, center_y + 50);
-  const Vector2i slot_bc(center_x,            center_y + 120);
+  // Three rows, centered vertically as a group
+  const Vector2i slot_tl(center_x - x_offset, center_y - 30);
+  const Vector2i slot_tr(center_x + x_offset, center_y - 30);
+  const Vector2i slot_ml(center_x - x_offset, center_y - 30 + row_spacing);
+  const Vector2i slot_mr(center_x + x_offset, center_y - 30 + row_spacing);
+  const Vector2i slot_bl(center_x - x_offset, center_y - 30 + row_spacing * 2);
+  const Vector2i slot_br(center_x + x_offset, center_y - 30 + row_spacing * 2);
+  const Vector2i slot_bc(center_x,            center_y - 30 + row_spacing * 2);
 
-  // Left side is static (always the same)
+  // Row 1: Story | Options  (always)
   start_button->set_pos(slot_tl.x, slot_tl.y);
-  contrib_button->set_pos(slot_bl.x, slot_bl.y);
+  options_button->set_pos(slot_tr.x, slot_tr.y);
+
+  // Row 2: Levelsets | Credits  (always)
+  contrib_button->set_pos(slot_ml.x, slot_ml.y);
+  credits_button->set_pos(slot_mr.x, slot_mr.y);
 
 #ifndef DISABLE_EDITOR
-  // --- Standard Layout (5 Buttons) ---
-  editor_button->set_pos(slot_tr.x, slot_tr.y);
-  options_button->set_pos(slot_br.x, slot_br.y);
-  quit_button->set_pos(slot_bc.x, slot_bc.y);
-#else
-  // --- No Editor Layout (2x2 Grid) ---
-  options_button->set_pos(slot_tr.x, slot_tr.y);
+  // Row 3 with editor: Editor | Exit
+  editor_button->set_pos(slot_bl.x, slot_bl.y);
   quit_button->set_pos(slot_br.x, slot_br.y);
+#else
+  // Row 3 without editor: Exit centered
+  quit_button->set_pos(slot_bc.x, slot_bc.y);
 #endif
 }
 
@@ -201,6 +207,10 @@ PingusMenu::on_click(MenuButton* button)
   else if (button == contrib_button)
   {
     ScreenManager::instance()->push_screen(std::make_shared<LevelMenu>());
+  }
+  else if (button == credits_button)
+  {
+    show_credits();
   }
   else if (button == options_button)
   {
