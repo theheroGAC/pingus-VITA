@@ -304,15 +304,15 @@ public:
     gc.push_modelview();
     gc.translate(rect.left, rect.top);
 
-    Sprite sprite = levelset->get_image();
-    gc.draw(sprite, Vector2i(rect.get_width()/2 - sprite.get_width()/2 - 275, 15));
-    gc.draw(sprite, Vector2i(rect.get_width()/2 - sprite.get_width()/2 + 275, 15));
-
-    gc.print_center(fonts::chalk_large, Vector2i(rect.get_width()/2, 10), levelset->get_title());
-    gc.print_center(fonts::chalk_normal,  Vector2i(rect.get_width()/2, 62), levelset->get_description());
-
     if (levelset)
     {
+      Sprite sprite = levelset->get_image();
+      gc.draw(sprite, Vector2i(rect.get_width()/2 - sprite.get_width()/2 - 275, 15));
+      gc.draw(sprite, Vector2i(rect.get_width()/2 - sprite.get_width()/2 + 275, 15));
+
+      gc.print_center(fonts::chalk_large, Vector2i(rect.get_width()/2, 10), levelset->get_title());
+      gc.print_center(fonts::chalk_normal,  Vector2i(rect.get_width()/2, 62), levelset->get_description());
+
       levelset->refresh(); // should be better placed in on_startup() or so
 
       //gc.draw_fillrect(Rect(Vector2i(0,0), Size(rect.get_width(), rect.get_height())),
