@@ -9,6 +9,7 @@
 ```text
 Original Port by: r-win
 Updated by:       DeltaResero
+PS Vita port by:  theheroGAC
 Type:             Puzzle-Strategy
 Version:          0.7.7-wii-d.01
 Software license: GPLv3+
