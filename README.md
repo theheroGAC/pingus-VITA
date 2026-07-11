@@ -4,7 +4,7 @@
 
 <br><br>
 
-## Wii port of the free open source puzzle-strategy game Pingus
+## PSVITA port of the free open source puzzle-strategy game Pingus
 
 ```text
 Original Port by: r-win
