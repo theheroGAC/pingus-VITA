@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logos/pingus_wii_logo.png" width="75%" alt="Pingus Wii">
+  <img src="docs/assets/logos/logo_psvita.png" width="75%" alt="Pingus Wii">
 </p>
 
 <br><br>
