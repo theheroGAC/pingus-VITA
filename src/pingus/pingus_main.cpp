@@ -30,19 +30,26 @@
 #include "util/log.hpp"
 #include "util/string_util.hpp"
 #include "util/system.hpp"
+#include "util/i18n.hpp"
 
 #ifdef __WII__
 #  include "util/wii.hpp"
+#endif
+
+#ifdef __VITA__
+#  include "util/vita.hpp"
 #endif
 
 #include "util/command_line.hpp"
 
 #include "engine/screen/screen_manager.hpp"
 #include "pingus/globals.hpp"
+#include "pingus/options.hpp"
 #include "pingus/path_manager.hpp"
 #include "pingus/plf_res_mgr.hpp"
 
 #include "engine/sound/sound.hpp"
+#include <fstream>
 #include "pingus/resource.hpp"
 #include "pingus/savegame_manager.hpp"
 #include "pingus/screens/credits.hpp"
@@ -378,6 +385,9 @@ PingusMain::init_path_finder()
 #ifdef __WII__
     // On Wii, get data directory from SD/USB storage
     g_path_manager.set_path(Wii::get_data_dir());
+#elif defined(__VITA__)
+    // On Vita, game data is in the app bundle (app0:)
+    g_path_manager.set_path(Vita::get_data_dir());
 #else
     // assume game is run from source dir
     g_path_manager.set_path("data");
@@ -428,24 +438,31 @@ PingusMain::start_game ()
   input::Manager input_manager;
   input::ControllerPtr input_controller;
 
+  std::string controller_path;
+
   if (!cmd_options.controller.is_set())
   {
 #ifdef __WII__
     // On Wii, default to the Wii controller config if nothing else is specified
     // Note: We use DATA_PATH here because the file is in the game data, not user config
-    input_controller = input_manager.create_controller(Pathname("controller/wii.scm",
-                                                                Pathname::DATA_PATH));
+    controller_path = "controller/wii.scm";
+    input_controller = input_manager.create_controller(Pathname(controller_path, Pathname::DATA_PATH));
+#elif defined(__VITA__)
+    // On Vita, use the Vita controller config
+    controller_path = "controller/vita.scm";
+    input_controller = input_manager.create_controller(Pathname(controller_path, Pathname::DATA_PATH));
 #else
-    input_controller = input_manager.create_controller(Pathname("controller/default.scm",
-                                                                Pathname::DATA_PATH));
+    controller_path = "controller/default.scm";
+    input_controller = input_manager.create_controller(Pathname(controller_path, Pathname::DATA_PATH));
 #endif
   }
   else
   {
-    input_controller = input_manager.create_controller(Pathname(cmd_options.controller.get(),
-                                                                Pathname::SYSTEM_PATH));
+    controller_path = cmd_options.controller.get();
+    input_controller = input_manager.create_controller(Pathname(controller_path, Pathname::SYSTEM_PATH));
   }
 
+  log_info("Vita startup: controller config {} loaded", controller_path);
   ScreenManager  screen_manager(input_manager, input_controller);
 
 #ifndef DISABLE_EDITOR
@@ -521,11 +538,37 @@ PingusMain::start_game ()
 int
 PingusMain::run(int argc, char** argv)
 {
+#ifdef __VITA__
+  logmich::set_log_level(logmich::kInfo);
+#else
   logmich::set_log_level(logmich::kWarning);
+#endif
 
   try
   {
     parse_args(argc, argv);
+
+#ifdef __VITA__
+    // Ensure user-writable Vita base dir exists and redirect logs early.
+    try {
+      System::create_dir(Vita::get_base_dir());
+    } catch (...) {
+      // ignore failures here; later code will handle fatal errors.
+    }
+
+    static std::shared_ptr<std::ofstream> vita_log_file;
+    if (!vita_log_file) {
+      vita_log_file = std::make_shared<std::ofstream>(Vita::get_base_dir() + "pingus.log", std::ios::app);
+      if (vita_log_file->is_open()) {
+        std::cout.rdbuf(vita_log_file->rdbuf());
+        std::cerr.rdbuf(vita_log_file->rdbuf());
+        log_info("Vita logging redirected to {}", Vita::get_base_dir() + "pingus.log");
+      } else {
+        log_warn("Failed to open Vita log file: {}", Vita::get_base_dir() + "pingus.log");
+      }
+    }
+#endif
+
     init_path_finder();
     read_rc_file();
     apply_args();
@@ -538,6 +581,20 @@ PingusMain::run(int argc, char** argv)
     cmd_options.resizable.set(false);
     cmd_options.fullscreen_resolution.set(Size(640, 480));
     cmd_options.geometry.set(Size(640, 480));
+    cmd_options.framebuffer_type.set(OPENGL_FRAMEBUFFER);
+    // Ensure globals are updated with these forced values
+    globals::software_cursor = true;
+#endif
+
+#ifdef __VITA__
+    // Force Vita-appropriate defaults AFTER parsing arguments and config files
+    // to prevent accidental overrides.
+    cmd_options.software_cursor.set(true);
+    cmd_options.fullscreen.set(true);
+    cmd_options.resizable.set(false);
+    cmd_options.fullscreen_resolution.set(Size(960, 544));
+    cmd_options.geometry.set(Size(960, 544));
+    cmd_options.framebuffer_type.set(OPENGL_FRAMEBUFFER);
     // Ensure globals are updated with these forced values
     globals::software_cursor = true;
 #endif
@@ -545,7 +602,11 @@ PingusMain::run(int argc, char** argv)
     print_greeting_message();
 
     // init the display
+#ifdef __VITA__
+    FramebufferType fbtype = OPENGL_FRAMEBUFFER;
+#else
     FramebufferType fbtype = SDL_FRAMEBUFFER;
+#endif
     if (cmd_options.framebuffer_type.is_set())
     {
       fbtype = cmd_options.framebuffer_type.get();
@@ -574,6 +635,7 @@ PingusMain::run(int argc, char** argv)
     try
     {
       system.create_window(fbtype, screen_size, fullscreen, resizable);
+      log_info("Vita startup: window created with renderer {} {}x{}", framebuffer_type_to_string(fbtype), screen_size.width, screen_size.height);
     }
     catch(const std::exception& err)
     {
@@ -592,6 +654,8 @@ PingusMain::run(int argc, char** argv)
       }
     }
 
+    log_info("Vita startup: beginning game initialization");
+
     // init other components
     SavegameManager savegame_manager("savegames/savegames.scm");
     StatManager stat_manager("savegames/variables.scm");
@@ -602,6 +666,14 @@ PingusMain::run(int argc, char** argv)
     sound::PingusSound::init();
 
     config_manager.apply(cmd_options);
+
+    // Initialize translation system (i18n) after config is applied
+    // so the configured language from the config file is used
+    {
+      std::string lang = config_manager.get_language();
+      i18n::init(lang);
+      log_info("Initialized i18n with language: {}", lang);
+    }
 
     // start and run the actual game
     start_game();

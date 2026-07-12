@@ -9,7 +9,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-#include <format>
+#include <sstream>
 #include "pingus/pingus_level.hpp"
 
 #include <stdexcept>
@@ -56,7 +56,11 @@ PingusLevel::load(const std::string& resname,
 
   if (reader.get_name() != "pingus-level")
   {
-    throw std::runtime_error(std::format("Error: {}: not a 'pingus-level' file", pathname.str()));
+    {
+      std::ostringstream ss;
+      ss << "Error: " << pathname.str() << ": not a 'pingus-level' file";
+      throw std::runtime_error(ss.str());
+    }
   }
   else
   {
@@ -69,7 +73,11 @@ PingusLevel::load(const std::string& resname,
     FileReader head;
     if (!reader.read_section("head", head))
     {
-      throw std::runtime_error(std::format("Error: (head) section not found in '{}'", pathname.str()));
+      {
+        std::ostringstream ss;
+        ss << "Error: (head) section not found in '" << pathname.str() << "'";
+        throw std::runtime_error(ss.str());
+      }
     }
     else
     {
@@ -104,7 +112,11 @@ PingusLevel::load(const std::string& resname,
       }
       else
       {
-        throw std::runtime_error(std::format("Error: (pingus-level head actions) not found in '{}'", pathname.str()));
+        {
+          std::ostringstream ss;
+          ss << "Error: (pingus-level head actions) not found in '" << pathname.str() << "'";
+          throw std::runtime_error(ss.str());
+        }
       }
     }
 

@@ -9,7 +9,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-#include <format>
+#include <sstream>
 #include "pingus/levelset.hpp"
 
 #include <algorithm>
@@ -60,7 +60,9 @@ Levelset::from_file(const Pathname& pathname)
   FileReader reader = FileReader::parse(pathname);
   if (reader.get_name() != "pingus-levelset")
   {
-    throw std::runtime_error(std::format("Error: {}: not a 'pingus-levelset' file", pathname.str()));
+    std::ostringstream ss;
+    ss << "Error: " << pathname.str() << ": not a 'pingus-levelset' file";
+    throw std::runtime_error(ss.str());
   }
   else
   {

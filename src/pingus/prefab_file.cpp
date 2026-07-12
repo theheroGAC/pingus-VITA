@@ -9,7 +9,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-#include <format>
+#include <sstream>
 #include "pingus/prefab_file.hpp"
 
 #include <stdexcept>
@@ -27,7 +27,11 @@ PrefabFile::from_path(const Pathname& filename)
 
   if (reader.get_name() != "pingus-prefab")
   {
-    throw std::runtime_error(std::format("Error: {}: not a 'pingus-prefab' file", filename.str()));
+    {
+      std::ostringstream ss;
+      ss << "Error: " << filename.str() << ": not a 'pingus-prefab' file";
+      throw std::runtime_error(ss.str());
+    }
   }
   else
   {
@@ -37,7 +41,11 @@ PrefabFile::from_path(const Pathname& filename)
     FileReader objects;
     if (!reader.read_section("objects", objects) || objects.get_sections().empty())
     {
-      throw std::runtime_error(std::format("Error: {}: empty prefab file", filename.str()));
+      {
+        std::ostringstream ss;
+        ss << "Error: " << filename.str() << ": empty prefab file";
+        throw std::runtime_error(ss.str());
+      }
     }
     else
     {

@@ -21,6 +21,7 @@
 #include "util/sexpr_file_reader.hpp"
 #include "util/sexpr_file_writer.hpp"
 #include "util/system.hpp"
+#include "util/i18n.hpp"
 #include "engine/sound/sound.hpp"
 
 namespace pingus {
@@ -193,7 +194,7 @@ ConfigManager::set_mouse_grab(bool v)
 
   if (v != get_mouse_grab())
   {
-#ifndef __WII__
+#if !defined(__WII__) && !defined(__VITA__)
     if (Framebuffer* fb = Display::get_framebuffer())
     {
       if (SDL_Window* window = fb->get_window())
@@ -212,8 +213,8 @@ ConfigManager::set_mouse_grab(bool v)
 bool
 ConfigManager::get_mouse_grab() const
 {
-#ifdef __WII__
-  return false; // No mouse grab on Wii
+#if defined(__WII__) || defined(__VITA__)
+  return false; // No mouse grab on Wii/Vita
 #else
   if (Framebuffer* fb = Display::get_framebuffer())
   {
@@ -307,6 +308,27 @@ ConfigManager::get_drag_drop_scrolling() const
   return globals::drag_drop_scrolling;
 }
 
+void
+ConfigManager::set_language(const std::string& lang)
+{
+  if (lang != get_language())
+  {
+    i18n::set_language(lang);
+    m_opts.language.set(lang);
+    if (on_language_change)
+      on_language_change(lang);
+  }
+}
+
+std::string
+ConfigManager::get_language() const
+{
+  if (m_opts.language.is_set())
+    return m_opts.language.get();
+  else
+    return i18n::get_language();
+}
+
 
 Options
 ConfigManager::get_options() const
@@ -353,6 +375,9 @@ ConfigManager::apply(const Options& opts)
 
   if (opts.auto_scrolling.is_set())
     set_auto_scrolling(opts.auto_scrolling.get());
+
+  if (opts.language.is_set())
+    set_language(opts.language.get());
 }
 
 

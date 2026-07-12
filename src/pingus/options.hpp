@@ -97,6 +97,7 @@ struct Options
   // Misc
   Value<std::string> datadir;
   Value<std::string> userdir;
+  Value<std::string> language;
 
   Value<bool> auto_scrolling;
   Value<bool> drag_drop_scrolling;
@@ -124,6 +125,7 @@ struct Options
     disable_music(),
     datadir(),
     userdir(),
+    language(),
     auto_scrolling(),
     drag_drop_scrolling(),
     controller(),

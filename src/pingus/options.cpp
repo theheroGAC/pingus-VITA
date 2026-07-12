@@ -10,7 +10,6 @@
 // (at your option) any later version.
 
 #include <sstream>
-#include <format>
 #include "pingus/options.hpp"
 
 #include <stdexcept>
@@ -36,7 +35,11 @@ std::string framebuffer_type_to_string(FramebufferType type)
       return "null";
 
     case OPENGL_FRAMEBUFFER:
+#ifdef __VITA__
+      return "vitagl";
+#else
       return "opengl";
+#endif
 
     default:
       log_error("unknown FramebufferType: {}", static_cast<int>(type));
@@ -54,7 +57,7 @@ FramebufferType framebuffer_type_from_string(const std::string& str)
   {
     return NULL_FRAMEBUFFER;
   }
-  else if (str == "opengl")
+  else if (str == "opengl" || str == "vitagl")
   {
 #ifdef HAVE_OPENGL
     return OPENGL_FRAMEBUFFER;
@@ -80,7 +83,9 @@ Options::from_file(const Pathname& filename)
 
   if (reader.get_name() != "pingus-config")
   {
-    throw std::runtime_error(std::format("Error: {}: not a (pingus-config) file", filename.str()));
+    std::ostringstream ss;
+    ss << "Error: " << filename.str() << ": not a (pingus-config) file";
+    throw std::runtime_error(ss.str());
   }
 
   return from_file_reader(reader);
@@ -168,6 +173,11 @@ Options::from_file_reader(const FileReader& reader)
     opts.drag_drop_scrolling.set(bool_value);
   }
 
+  if (reader.read_string("language", string_value))
+  {
+    opts.language.set(string_value);
+  }
+
   return opts;
 }
 
@@ -221,6 +231,9 @@ Options::save(const Pathname& filename) const
   if (drag_drop_scrolling.is_set())
     writer.write_bool("drag-drop-scrolling", drag_drop_scrolling.get());
 
+  if (language.is_set())
+    writer.write_string("language", language.get());
+
   writer.end_mapping(); // pingus-config
 
   out << std::endl;
@@ -250,6 +263,7 @@ Options::merge(const Options& rhs)
   // Misc
   datadir.merge(rhs.datadir);
   userdir.merge(rhs.userdir);
+  language.merge(rhs.language);
 
   auto_scrolling.merge(rhs.auto_scrolling);
   drag_drop_scrolling.merge(rhs.drag_drop_scrolling);

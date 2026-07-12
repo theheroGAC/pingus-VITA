@@ -29,7 +29,7 @@ int         tile_size               = 32;
 
 bool        draw_collision_map      = false;
 
-#ifdef __WII__
+#if defined(__WII__) || defined(__VITA__)
 bool        software_cursor         = true;
 #else
 bool        software_cursor         = false;

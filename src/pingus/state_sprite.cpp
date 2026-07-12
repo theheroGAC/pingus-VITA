@@ -9,7 +9,6 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-#include <format>
 #include "pingus/state_sprite.hpp"
 
 #include <sstream>
@@ -58,7 +57,11 @@ StateSprite::operator[](int state)
   }
   else
   {
-    throw std::runtime_error(std::format("StateSprite error: state {} not available", state));
+    {
+      std::ostringstream ss;
+      ss << "StateSprite error: state " << state << " not available";
+      throw std::runtime_error(ss.str());
+    }
   }
 }
 

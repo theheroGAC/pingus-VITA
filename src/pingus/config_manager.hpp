@@ -82,6 +82,10 @@ public:
   bool get_drag_drop_scrolling() const;
   std::function<void(bool)> on_drag_drop_scrolling_change;
 
+  void set_language(const std::string&);
+  std::string get_language() const;
+  std::function<void(std::string)> on_language_change;
+
 private:
   ConfigManager (const ConfigManager&);
   ConfigManager& operator= (const ConfigManager&);
