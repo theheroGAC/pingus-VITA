@@ -12,10 +12,10 @@
 #ifndef HEADER_PINGUS_ENGINE_DISPLAY_OPENGL_OPENGL_FRAMEBUFFER_SURFACE_IMPL_HPP
 #define HEADER_PINGUS_ENGINE_DISPLAY_OPENGL_OPENGL_FRAMEBUFFER_SURFACE_IMPL_HPP
 
-#ifdef __WII__
+#if defined(__VITA__)
+#  include <vitaGL.h>
+#elif defined(__WII__)
 #  include <GL/gl.h>
-#  include <GL/glu.h>
-#  include <GL/glext.h>
 #else
 #  include <SDL_opengl.h>
 #endif

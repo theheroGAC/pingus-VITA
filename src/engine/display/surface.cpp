@@ -12,7 +12,7 @@
 #include "engine/display/surface.hpp"
 
 #include <SDL2/SDL_image.h>
-#include <format>
+#include <iomanip>
 #include <ostream>
 #include <stdexcept>
 
@@ -67,7 +67,10 @@ Surface::Surface(const Pathname& pathname) :
   SDL_Surface* surface = IMG_Load(pathname.get_sys_path().c_str());
   if (!surface)
   {
-    throw std::runtime_error(std::format("couldn't load {}\n  IMG_GetError: {}", pathname.get_sys_path(), IMG_GetError()));
+    std::ostringstream err;
+    err << "couldn't load " << pathname.get_sys_path()
+        << "\n  IMG_GetError: " << IMG_GetError();
+    throw std::runtime_error(err.str());
   }
   else
   {
@@ -514,23 +517,15 @@ Surface::print(std::ostream& out)
   SDL_GetSurfaceBlendMode(impl->surface, &blend_mode);
   bool has_alpha_blend = (blend_mode != SDL_BLENDMODE_NONE);
 
-  out << std::format("Pointer: 0x{:p}\n"
-                     "Rmask:   0x{:08x}\n"
-                     "Gmask:   0x{:08x}\n"
-                     "Bmask:   0x{:08x}\n"
-                     "Amask:   0x{:08x}\n"
-                     "Flags:   {}{}\n"
-                     "Palette: 0x{:p}\n"
-                     "BitsPerPixel: {}\n",
-                     (void*)impl->surface,
-                     impl->surface->format->Rmask,
-                     impl->surface->format->Gmask,
-                     impl->surface->format->Bmask,
-                     impl->surface->format->Amask,
-                     (has_colorkey    ? "COLORKEY " : ""),
-                     (has_alpha_blend ? "ALPHA_BLEND " : ""),
-                     (void*)impl->surface->format->palette,
-                     static_cast<int>(impl->surface->format->BitsPerPixel));
+  out << "Pointer: 0x" << std::hex << std::setw(0) << (void*)impl->surface << std::dec << "\n"
+      << "Rmask:   0x" << std::hex << std::setw(8) << std::setfill('0') << impl->surface->format->Rmask << std::dec << "\n"
+      << "Gmask:   0x" << std::hex << std::setw(8) << std::setfill('0') << impl->surface->format->Gmask << std::dec << "\n"
+      << "Bmask:   0x" << std::hex << std::setw(8) << std::setfill('0') << impl->surface->format->Bmask << std::dec << "\n"
+      << "Amask:   0x" << std::hex << std::setw(8) << std::setfill('0') << impl->surface->format->Amask << std::dec << "\n"
+      << "Flags:   " << (has_colorkey ? "COLORKEY " : "")
+      << (has_alpha_blend ? "ALPHA_BLEND " : "") << "\n"
+      << "Palette: 0x" << std::hex << std::setw(0) << (void*)impl->surface->format->palette << std::dec << "\n"
+      << "BitsPerPixel: " << static_cast<int>(impl->surface->format->BitsPerPixel) << "\n";
 
   if (has_colorkey)
     out << "Colorkey: " << static_cast<int>(colorkey) << std::endl;
@@ -540,11 +535,11 @@ Surface::print(std::ostream& out)
     SDL_LockSurface(impl->surface);
     Uint8* pixels = static_cast<Uint8*>(impl->surface->pixels);
     for(int i = 0; i < impl->surface->pitch * impl->surface->h; i += 4)
-      out << std::format("({:3d} {:3d} {:3d} {:3d}) ",
-                         static_cast<int>(pixels[i+0]),
-                         static_cast<int>(pixels[i+1]),
-                         static_cast<int>(pixels[i+2]),
-                         static_cast<int>(pixels[i+3]));
+      out << "(" << std::setw(3) << std::dec << static_cast<int>(pixels[i+0])
+          << " " << std::setw(3) << std::dec << static_cast<int>(pixels[i+1])
+          << " " << std::setw(3) << std::dec << static_cast<int>(pixels[i+2])
+          << " " << std::setw(3) << std::dec << static_cast<int>(pixels[i+3])
+          << ") ";
     out << std::endl;
     SDL_UnlockSurface(impl->surface);
   }

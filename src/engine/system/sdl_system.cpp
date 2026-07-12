@@ -17,6 +17,10 @@
 #  include <wiiuse/wpad.h>
 #endif
 
+#ifdef __VITA__
+#  include <vitaGL.h>
+#endif
+
 #include "engine/display/display.hpp"
 #include "engine/display/framebuffer.hpp"
 #include "math/size.hpp"
@@ -37,7 +41,9 @@ SDLSystem::SDLSystem()
   WPAD_SetVRes(WPAD_CHAN_ALL, 640 + 128, 480 + 128);
 
   log_info("Wii Remote initialized");
+#endif
 
+#if defined(__WII__) || defined(__VITA__)
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_AUDIO) != 0)
 #else
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) != 0)
@@ -79,6 +85,27 @@ SDLSystem::SDLSystem()
   }
 #endif
 
+#ifdef __VITA__
+  // Initialize vitaGL (memory pool size: 16MB)
+  vglInit(0x1000000);
+  log_info("vitaGL initialized");
+
+  // Open Vita controller joystick
+  SDL_JoystickEventState(SDL_ENABLE);
+  int num_joysticks_vita = SDL_NumJoysticks();
+  log_info("SDL detected {} joystick(s) on Vita", num_joysticks_vita);
+  if (num_joysticks_vita > 0)
+  {
+    SDL_Joystick* joy = SDL_JoystickOpen(0);
+    if (!joy)
+      log_warn("Could not open Vita controller joystick 0: {}", SDL_GetError());
+    else
+      log_info("Vita controller opened: {} axes, {} buttons",
+               SDL_JoystickNumAxes(joy),
+               SDL_JoystickNumButtons(joy));
+  }
+#endif
+
   // Initialise SDL_image format support.
   {
     const int img_flags = IMG_INIT_JPG | IMG_INIT_PNG;
@@ -99,7 +126,7 @@ SDLSystem::create_window(FramebufferType framebuffer_type, const Size& size, boo
 {
   Display::create_window(framebuffer_type, size, fullscreen, resizable);
 
-#ifndef __WII__
+#if !defined(__WII__) && !defined(__VITA__)
   // Set window title and icon after creation via the framebuffer's SDL_Window pointer.
   SDL_Window* win = Display::get_framebuffer()
                     ? Display::get_framebuffer()->get_window()

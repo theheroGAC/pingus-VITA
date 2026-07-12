@@ -15,6 +15,14 @@
 #include <sstream>
 #include <stdexcept>
 
+#if defined(__VITA__)
+#  include <vitaGL.h>
+#elif defined(__WII__)
+#  include <GL/gl.h>
+#else
+#  include <SDL2/SDL_opengl.h>
+#endif
+
 #include "engine/display/display.hpp"
 #include "engine/display/opengl/opengl_framebuffer_surface_impl.hpp"
 
@@ -35,11 +43,15 @@ OpenGLFramebuffer::OpenGLFramebuffer() :
 
 OpenGLFramebuffer::~OpenGLFramebuffer()
 {
+#if !defined(__VITA__)
+  // On Vita, vitaGL manages its own OpenGL context internally,
+  // so we skip SDL_GL_DeleteContext entirely.
   if (m_gl_context)
   {
     SDL_GL_DeleteContext(m_gl_context);
     m_gl_context = nullptr;
   }
+#endif
   if (m_window)
   {
     SDL_DestroyWindow(m_window);
@@ -56,16 +68,25 @@ OpenGLFramebuffer::create_surface(const Surface& surface)
 void
 OpenGLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resizable)
 {
+  (void) resizable;
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,   16);
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE,  0);
 
-  Uint32 flags = SDL_WINDOW_OPENGL;
+  Uint32 flags = 0;
 
-#ifdef __WII__
+#if defined(__WII__)
+  // On Wii, OpenGX provides OpenGL support through SDL
+  flags |= SDL_WINDOW_OPENGL;
   // Wii always runs fullscreen
   flags |= SDL_WINDOW_FULLSCREEN;
+#elif defined(__VITA__)
+  // On Vita, vitaGL is already initialized in sdl_system.cpp
+  // Do NOT use SDL_WINDOW_OPENGL - vitaGL handles OpenGL context internally
+  // Vita always runs fullscreen
+  flags |= SDL_WINDOW_FULLSCREEN;
 #else
+  flags |= SDL_WINDOW_OPENGL;
   if (fullscreen)
     flags |= SDL_WINDOW_FULLSCREEN;
   else if (resizable)
@@ -88,6 +109,9 @@ OpenGLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resiza
       throw std::runtime_error(msg.str());
     }
 
+#if !defined(__VITA__)
+    // On Vita, vitaGL manages its own OpenGL context internally,
+    // so we skip SDL_GL_CreateContext entirely.
     m_gl_context = SDL_GL_CreateContext(m_window);
     if (m_gl_context == nullptr)
     {
@@ -95,10 +119,12 @@ OpenGLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resiza
       msg << "Couldn't create OpenGL context: " << SDL_GetError();
       throw std::runtime_error(msg.str());
     }
+#endif
 
     // SDL_GL_SetSwapInterval is absent in some Wii portlib builds and causes
     // a null-function-pointer crash if called there.
-#ifndef __WII__
+    // On Vita, vitaGL handles vsync internally.
+#if !defined(__WII__) && !defined(__VITA__)
     SDL_GL_SetSwapInterval(1);
 #endif
   }
@@ -115,8 +141,8 @@ OpenGLFramebuffer::set_video_mode(const Size& size, bool fullscreen, bool resiza
   }
 
   // SDL_GL_GetDrawableSize is absent in some Wii portlib builds; use
-  // SDL_GetWindowSize on Wii (no HiDPI scaling there anyway).
-#ifdef __WII__
+  // SDL_GetWindowSize on Wii and Vita (no HiDPI scaling on either).
+#if defined(__WII__) || defined(__VITA__)
   SDL_GetWindowSize(m_window, &m_window_w, &m_window_h);
 #else
   SDL_GL_GetDrawableSize(m_window, &m_window_w, &m_window_h);
@@ -169,7 +195,11 @@ OpenGLFramebuffer::is_resizable() const
 void
 OpenGLFramebuffer::flip()
 {
+#ifdef __VITA__
+  vglSwapBuffers(GL_TRUE);
+#else
   SDL_GL_SwapWindow(m_window);
+#endif
 }
 
 void

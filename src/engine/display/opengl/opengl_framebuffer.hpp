@@ -14,10 +14,10 @@
 
 #include "engine/display/framebuffer.hpp"
 
-#ifdef __WII__
+#if defined(__VITA__)
+#  include <vitaGL.h>
+#elif defined(__WII__)
 #  include <GL/gl.h>
-#  include <GL/glu.h>
-#  include <GL/glext.h>
 #else
 #  include <SDL2/SDL_opengl.h>
 #endif

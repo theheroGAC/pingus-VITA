@@ -9,7 +9,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-#include <format>
+#include <sstream>
 #include "engine/input/controller_description.hpp"
 
 #include <stdexcept>
@@ -108,7 +108,11 @@ ControllerDescription::get_definition(const std::string& name) const
 {
   std::map<std::string, InputEventDefinition>::const_iterator i = str_to_event.find(name);
   if (i == str_to_event.end())
-    throw std::runtime_error(std::format("Unknown event str: {}", name));
+  {
+    std::ostringstream ss;
+    ss << "Unknown event str: " << name;
+    throw std::runtime_error(ss.str());
+  }
 
   return i->second;
 }

@@ -27,14 +27,17 @@
 #include "engine/display/opengl/opengl_framebuffer_surface_impl.hpp"
 #endif
 
+#if defined(__VITA__)
+#  include <vitaGL.h>
+#elif defined(__WII__)
+#  include <GL/gl.h>
+#else
+#  include <SDL2/SDL_opengl.h>
+#endif
+
 namespace pingus {
 
 #ifdef HAVE_OPENGL
-#ifdef __WII__
-#  include <GL/gl.h>
-#else
-#  include <SDL_opengl.h>
-#endif
 
 struct GlyphVertex {
   GLfloat x, y;

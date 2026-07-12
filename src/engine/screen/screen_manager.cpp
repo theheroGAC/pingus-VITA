@@ -164,6 +164,7 @@ ScreenManager::~ScreenManager()
 void
 ScreenManager::display()
 {
+  log_info("ScreenManager: entering display loop");
   show_software_cursor(globals::software_cursor);
 
   Uint32 last_ticks = SDL_GetTicks();

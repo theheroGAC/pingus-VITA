@@ -9,8 +9,8 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-#include <format>
 #include "engine/sound/sound_real.hpp"
+#include <sstream>
 
 #include <SDL2/SDL.h>
 #include <stdexcept>
@@ -31,14 +31,22 @@ PingusSoundReal::PingusSoundReal() :
 
   if (SDL_Init(SDL_INIT_AUDIO) == -1)
   {
-    throw std::runtime_error(std::format("Unable to initialize SDL: {}", SDL_GetError()));
+    {
+      std::ostringstream ss;
+      ss << "Unable to initialize SDL: " << SDL_GetError();
+      throw std::runtime_error(ss.str());
+    }
   }
 
   log_info("Initializing SDL_Mixer");
 
   if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) == -1)
   {
-    throw std::runtime_error(std::format("Unable to initialize SDL_Mixer: {}", Mix_GetError()));
+    {
+      std::ostringstream ss;
+      ss << "Unable to initialize SDL_Mixer: " << Mix_GetError();
+      throw std::runtime_error(ss.str());
+    }
   }
 }
 
@@ -98,7 +106,11 @@ PingusSoundReal::real_play_music(std::string_view filename, float volume, bool l
       m_master_volume > 0 &&
       m_music_volume > 0)
   {
-    log_info("PingusSoundReal: Playing music: {}", filename);
+    {
+      std::ostringstream ss;
+      ss << "PingusSoundReal: Playing music: " << filename;
+      log_info(ss.str());
+    }
 
     real_stop_music();
 
@@ -109,7 +121,11 @@ PingusSoundReal::real_play_music(std::string_view filename, float volume, bool l
     music_sample = Mix_LoadMUS(safe_filename.c_str());
     if (!music_sample)
     {
-      log_error("Can't load music: {}' -- skipping\n  Mix_Error: {}", filename, Mix_GetError());
+      {
+        std::ostringstream ss;
+        ss << "Can't load music: '" << filename << "' -- skipping\n  Mix_Error: " << Mix_GetError();
+        log_error(ss.str());
+      }
       return;
     }
 

@@ -499,8 +499,8 @@ SDLDriver::update(float delta)
 
       case SDL_MOUSEMOTION:
       {
-#ifdef __WII__
-        // On Wii the pointer is updated from WPAD IR above; ignore SDL_MOUSEMOTION.
+#if defined(__WII__) || defined(__VITA__)
+        // On Wii/Vita the pointer is updated from joystick/WPAD above; ignore SDL_MOUSEMOTION.
         break;
 #else
         {

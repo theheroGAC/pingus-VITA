@@ -16,10 +16,10 @@
 #include <png.h>
 
 #ifdef HAVE_OPENGL
-#  ifdef __WII__
+#  if defined(__VITA__)
+#    include <vitaGL.h>
+#  elif defined(__WII__)
 #    include <GL/gl.h>
-#    include <GL/glu.h>
-#    include <GL/glext.h>
 #  else
 #    include <SDL2/SDL_opengl.h>
 #  endif
@@ -46,7 +46,15 @@ Screenshot::make_screenshot()
 #ifdef HAVE_OPENGL
   // If the framebuffer has an SDL_Window with an active GL context, read via GL
   SDL_Window* win = fb ? fb->get_window() : nullptr;
-  if (win && (SDL_GetWindowFlags(win) & SDL_WINDOW_OPENGL))
+  bool has_opengl_window = false;
+#if defined(__VITA__)
+  // On Vita, SDL_WINDOW_OPENGL is not set because vitaGL manages its own context,
+  // but we still use OpenGL for rendering.
+  has_opengl_window = (win != nullptr);
+#else
+  has_opengl_window = (win && (SDL_GetWindowFlags(win) & SDL_WINDOW_OPENGL));
+#endif
+  if (has_opengl_window)
   {
     int w, h;
     SDL_GetWindowSize(win, &w, &h);
