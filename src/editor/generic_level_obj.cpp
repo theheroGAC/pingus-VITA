@@ -9,7 +9,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-#include <format>
+#include <sstream>
 #include "editor/generic_level_obj.hpp"
 
 #include <stdexcept>
@@ -140,7 +140,9 @@ GenericLevelObj::get_attributes(std::string obj_type)
     return HAS_SPRITE_FAKE | HAS_TARGET_ID;
   else
   {
-    throw std::runtime_error(std::format("unknown object type: '{}'", obj_type));
+    std::ostringstream ss;
+    ss << "unknown object type: '" << obj_type << "'";
+    throw std::runtime_error(ss.str());
   }
 }
 
