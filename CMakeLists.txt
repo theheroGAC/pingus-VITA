@@ -22,7 +22,7 @@ endif()
 project(Pingus VERSION 0.7.7 LANGUAGES C CXX)
 
 # We define the full version string manually for the game to display
-set(PROJECT_FULL_VERSION "v0.7.7-wii-d.01")
+set(PROJECT_FULL_VERSION "psvita 1.00")
 set(VERSION ${PROJECT_FULL_VERSION})
 
 # Build Type Configuration (Default to Release)
@@ -42,18 +42,25 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Detect Wii build
+# Detect Wii or Vita build
 if(CMAKE_SYSTEM_NAME STREQUAL "NintendoWii")
   set(WII_BUILD ON)
+  set(VITA_BUILD OFF)
   message(STATUS "Configuring for Nintendo Wii")
   add_compile_definitions(__WII__ GEKKO)
+elseif(VITA)
+  set(WII_BUILD OFF)
+  set(VITA_BUILD ON)
+  message(STATUS "Configuring for PlayStation Vita")
+  add_compile_definitions(__VITA__)
 else()
   set(WII_BUILD OFF)
+  set(VITA_BUILD OFF)
 endif()
 
 # Cross-compilation safety check
-if(CMAKE_CROSSCOMPILING AND NOT WII_BUILD)
-  message(WARNING "Cross-compiling detected but not for Wii. "
+if(CMAKE_CROSSCOMPILING AND NOT WII_BUILD AND NOT VITA_BUILD)
+  message(WARNING "Cross-compiling detected but not for Wii or Vita. "
                   "If this is unintentional, please check your toolchain file.")
 endif()
 
@@ -83,13 +90,17 @@ if(WII_BUILD)
     # Force OpenGL on Wii (OpenGX) and disable Editor by default
     option(WITH_OPENGL "Build with OpenGL support" ON)
     option(WITH_EDITOR "Build with level editor support" OFF)
+elseif(VITA_BUILD)
+    # Force OpenGL on Vita (vitaGL) and disable Editor
+    option(WITH_OPENGL "Build with OpenGL support" ON)
+    option(WITH_EDITOR "Build with level editor support" OFF)
 else()
     option(WITH_OPENGL "Build with OpenGL support" ON)
     option(WITH_EDITOR "Build with level editor support" OFF)
 endif()
 
 option(BUILD_TESTS "Build test programs" OFF)
-option(ENABLE_LOGGING "Enable application logging" OFF)
+option(ENABLE_LOGGING "Enable application logging" ON)
 
 # Compiler Warning Options
 option(WARNINGS "Enable extra compiler warnings (-Wall -Wextra)" ON)
@@ -100,13 +111,17 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 # Find required packages
-find_package(PkgConfig REQUIRED)
+if(NOT VITA_BUILD)
+  find_package(PkgConfig REQUIRED)
+endif()
 
 # SDL2 and related libraries
-pkg_check_modules(SDL2 REQUIRED sdl2)
-pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
-pkg_check_modules(SDL2_MIXER REQUIRED SDL2_mixer)
-pkg_check_modules(PNG REQUIRED libpng)
+if(NOT VITA_BUILD)
+  pkg_check_modules(SDL2 REQUIRED sdl2)
+  pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
+  pkg_check_modules(SDL2_MIXER REQUIRED SDL2_mixer)
+  pkg_check_modules(PNG REQUIRED libpng)
+endif()
 
 # Wii Specific Libraries
 if(WII_BUILD)
@@ -133,12 +148,17 @@ endif()
 # OpenGL (optional)
 if(WITH_OPENGL)
     set(OpenGL_GL_PREFERENCE LEGACY)
-    
+
     if(WII_BUILD)
         # On Wii, we use OpenGX which provides standard GL symbols
         set(OPENGL_FOUND TRUE)
         set(HAVE_OPENGL 1)
         message(STATUS "OpenGL support: enabled (OpenGX)")
+    elseif(VITA_BUILD)
+        # On Vita, we use vitaGL which provides standard GL symbols
+        set(OPENGL_FOUND TRUE)
+        set(HAVE_OPENGL 1)
+        message(STATUS "OpenGL support: enabled (vitaGL)")
     else()
         find_package(OpenGL)
         if(OPENGL_FOUND)
@@ -155,11 +175,15 @@ endif()
 
 
 # Check for iconv
-# We skip detection on Wii to avoid cross-compilation linking errors during config
+# We skip detection on Wii/Vita to avoid cross-compilation linking errors during config
 if(WII_BUILD)
     set(ICONV_CONST "")
     set(HAVE_ICONV_CONST 1)
-    message(STATUS "Wii build: skipping detection, assuming iconv signature char**")
+    message(STATUS "Wii build: skipping iconv detection, assuming iconv signature char**")
+elseif(VITA_BUILD)
+    set(ICONV_CONST "")
+    set(HAVE_ICONV_CONST 1)
+    message(STATUS "Vita build: skipping iconv detection, assuming iconv signature char**")
 else()
     include(CheckCXXSourceCompiles)
     
@@ -268,6 +292,13 @@ if(WII_BUILD)
     include_directories($ENV{DEVKITPRO}/libogc/include)
 endif()
 
+if(VITA_BUILD)
+    include_directories(
+        "$ENV{VITASDK}/arm-vita-eabi/include"
+        "$ENV{VITASDK}/arm-vita-eabi/include/SDL2"
+    )
+endif()
+
 # Gather all Pingus source files
 file(GLOB_RECURSE PINGUS_SOURCES
     "${CMAKE_SOURCE_DIR}/src/editor/*.cpp"
@@ -301,6 +332,10 @@ if(WII_BUILD)
     list(APPEND PINGUS_SOURCES "${CMAKE_SOURCE_DIR}/src/util/wii.cpp")
 endif()
 
+if(VITA_BUILD)
+    list(APPEND PINGUS_SOURCES "${CMAKE_SOURCE_DIR}/src/util/vita.cpp")
+endif()
+
 # Windows-specific sources (Icon)
 if(WIN32)
     list(APPEND PINGUS_SOURCES "${CMAKE_SOURCE_DIR}/packaging/windows/pingus.rc")
@@ -324,53 +359,147 @@ if(ENABLE_LOGGING)
     target_compile_definitions(libpingus PRIVATE LOGGING_ENABLED)
 endif()
 
-# Set library name (without 'lib' prefix duplication)
 set_target_properties(libpingus PROPERTIES OUTPUT_NAME pingus)
 
-# Link libraries for libpingus
-target_link_libraries(libpingus
-    ${SDL2_LIBRARIES}
-    ${SDL2_IMAGE_LIBRARIES}
-    ${SDL2_MIXER_LIBRARIES}
-    ${PNG_LIBRARIES}
-)
-
-# Link Standard C++ Filesystem (Plain signature to match above)
-target_link_libraries(libpingus stdc++fs)
-
-if(WITH_OPENGL AND OPENGL_FOUND)
-    if(WII_BUILD)
-        target_link_libraries(libpingus ${OPENGX_LIB})
-    else()
-        target_link_libraries(libpingus ${OPENGL_LIBRARIES})
-    endif()
-endif()
-
-
-if(WII_BUILD)
-    target_link_libraries(libpingus 
-        ${FAT_LIB} 
-        ${WIIUSE_LIB} 
-        ${BTE_LIB} 
-        ${OGC_LIB} 
+if(VITA_BUILD)
+    target_link_libraries(libpingus
+        SDL2_image
+        SDL2_mixer
+        SDL2
+        webp
+        webpdecoder
+        webpdemux
+        webpmux
+        modplug
+        openmpt
+        opusfile
+        opus
+        xmp-lite
+        xmp
+        vorbisfile
+        vorbis
+        ogg
+        png
+        jpeg
+        z
         m
+        pthread
+        vitaGL
+        vitashark
+        mathneon
+        SceShaccCg_stub
+        SceShaccCgExt
+        taihen_stub
+        SceKernelDmacMgr_stub
+        SceAppMgr_stub
+        SceCtrl_stub
+        SceDisplay_stub
+        SceGxm_stub
+        ScePower_stub
+        SceSysmodule_stub
+        SceCommonDialog_stub
+        SceFios2_stub
+        SceAudio_stub
+        SceAudioIn_stub
+        SceMotion_stub
+        SceTouch_stub
+        SceHid_stub
+        SceIofilemgr_stub
+        m
+        pthread
     )
+else()
+    target_link_libraries(libpingus
+        ${SDL2_LIBRARIES}
+        ${SDL2_IMAGE_LIBRARIES}
+        ${SDL2_MIXER_LIBRARIES}
+        ${PNG_LIBRARIES}
+    )
+
+    # Link Standard C++ Filesystem
+    target_link_libraries(libpingus stdc++fs)
+
+    if(WITH_OPENGL AND OPENGL_FOUND)
+        if(WII_BUILD)
+            target_link_libraries(libpingus ${OPENGX_LIB})
+        else()
+            target_link_libraries(libpingus ${OPENGL_LIBRARIES})
+        endif()
+    endif()
+
+    if(WII_BUILD)
+        target_link_libraries(libpingus
+            ${FAT_LIB}
+            ${WIIUSE_LIB}
+            ${BTE_LIB}
+            ${OGC_LIB}
+            m
+        )
+    endif()
+
+    # Check if iconv is needed as a separate library (macOS, BSD)
+    if(ICONV_NEEDS_LIB)
+        find_library(ICONV_LIBRARY iconv)
+        if(ICONV_LIBRARY)
+            target_link_libraries(libpingus ${ICONV_LIBRARY})
+            message(STATUS "Linking separate iconv library: ${ICONV_LIBRARY}")
+        endif()
+    else()
+        message(STATUS "Using iconv from glibc (no separate library needed)")
+    endif()
 endif()
 
-# Check if iconv is needed as a separate library (macOS, BSD)
-if(ICONV_NEEDS_LIB)
-    find_library(ICONV_LIBRARY iconv)
-    if(ICONV_LIBRARY)
-        target_link_libraries(libpingus ${ICONV_LIBRARY})
-        message(STATUS "Linking separate iconv library: ${ICONV_LIBRARY}")
+file(GLOB PO_FILES "${CMAKE_SOURCE_DIR}/data/po/*.po")
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/data/translations")
+
+foreach(PO_FILE ${PO_FILES})
+    get_filename_component(PO_BASENAME ${PO_FILE} NAME_WE)
+    set(JSON_FILE "${CMAKE_SOURCE_DIR}/data/translations/${PO_BASENAME}.json")
+    
+    if(WIN32)
+        add_custom_command(OUTPUT ${JSON_FILE}
+            COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/data/po/po_to_json.ps1" 
+                    -PoFile "${PO_FILE}" -JsonFile "${JSON_FILE}"
+            DEPENDS ${PO_FILE}
+            COMMENT "Converting ${PO_BASENAME}.po to JSON"
+        )
+    else()
+        add_custom_command(OUTPUT ${JSON_FILE}
+            COMMAND python3 "${CMAKE_SOURCE_DIR}/data/po/po_to_json.py" 
+                    "${PO_FILE}" "${JSON_FILE}"
+            DEPENDS ${PO_FILE}
+            COMMENT "Converting ${PO_BASENAME}.po to JSON"
+        )
     endif()
-else()
-    message(STATUS "Using iconv from glibc (no separate library needed)")
-endif()
+    
+    list(APPEND JSON_FILES ${JSON_FILE})
+endforeach()
+
+add_custom_target(convert_translations ALL DEPENDS ${JSON_FILES})
 
 # Main executable
 add_executable(pingus src/main.cpp)
 target_link_libraries(pingus libpingus)
+add_dependencies(libpingus convert_translations)
+add_dependencies(pingus convert_translations)
+
+if(VITA_BUILD)
+    target_include_directories(pingus PRIVATE
+        ${CMAKE_BINARY_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+        "${VITASDK}/arm-vita-eabi/include"
+        "${VITASDK}/arm-vita-eabi/include/SDL2"
+    )
+    target_include_directories(libpingus PRIVATE
+        ${CMAKE_BINARY_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+        "${VITASDK}/arm-vita-eabi/include"
+        "${VITASDK}/arm-vita-eabi/include/SDL2"
+    )
+    target_compile_options(libpingus PRIVATE -Wno-psabi)
+    target_compile_options(pingus PRIVATE -Wno-psabi)
+    target_link_options(pingus PRIVATE "-Wl,-z,noexecstack" "-Wl,--no-warn-execstack")
+endif()
 
 # Generate a linker map file for Wii builds.
 # When the Wii exception screen shows a crash address, search pingus.map for
@@ -380,8 +509,29 @@ if(WII_BUILD)
     target_link_options(pingus PRIVATE -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/pingus.map)
 endif()
 
-# Post-Build Steps and Distribution Directory Creation
-if(WII_BUILD)
+if(VITA_BUILD)
+    include("${VITASDK}/share/vita.cmake" REQUIRED)
+
+    set(VITA_APP_NAME "Pingus")
+    set(VITA_TITLEID  "PINGUS001")
+    set(VITA_VERSION  "01.00")
+
+    vita_create_self(eboot.bin pingus UNSAFE)
+
+    # Package VPK with LiveArea assets and the data directory
+    vita_create_vpk(Pingus-PSVITA.vpk
+        ${VITA_TITLEID}
+        eboot.bin
+        VERSION ${VITA_VERSION}
+        NAME ${VITA_APP_NAME}
+
+        FILE sce_sys/icon0.png sce_sys/icon0.png
+        FILE sce_sys/livearea/contents/bg.png sce_sys/livearea/contents/bg.png
+        FILE sce_sys/livearea/contents/startup.png sce_sys/livearea/contents/startup.png
+        FILE sce_sys/livearea/contents/template.xml sce_sys/livearea/contents/template.xml
+    )
+
+elseif(WII_BUILD)
     # Wii: Create Homebrew Channel structure in build/apps/pingus/
     
     # Strip the ELF binary (Release builds only) to reduce file size
@@ -454,8 +604,8 @@ else()
     endif()
 endif()
 
-# Install targets (Skip for Wii, we build a custom app structure)
-if(NOT WII_BUILD)
+# Install targets (Skip for Wii/Vita, we build a custom app/VPK structure)
+if(NOT WII_BUILD AND NOT VITA_BUILD)
     install(TARGETS pingus DESTINATION bin)
     install(DIRECTORY data/ DESTINATION share/pingus)
     
@@ -488,6 +638,10 @@ if(WII_BUILD)
     message(STATUS "  Platform: Nintendo Wii")
     message(STATUS "  Renderer: OpenGX (Hardware Accelerated)")
     message(STATUS "  Output: build/apps/pingus/ (Homebrew Channel)")
+elseif(VITA_BUILD)
+    message(STATUS "  Platform: PlayStation Vita")
+    message(STATUS "  Renderer: vitaGL (Hardware Accelerated)")
+    message(STATUS "  Output: ${CMAKE_CURRENT_BINARY_DIR}/Pingus-PSVITA.vpk")
 else()
     message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")
     message(STATUS "  Distribution: build/dist/pingus/")
