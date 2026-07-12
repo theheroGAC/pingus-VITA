@@ -141,7 +141,7 @@ Playfield::update(float delta)
   if (globals::auto_scrolling)
   {
     bool mouse_in_window = true;
-#ifndef __WII__
+#if !defined(__WII__) && !defined(__VITA__)
     if (Framebuffer* fb = Display::get_framebuffer())
     {
       if (SDL_Window* window = fb->get_window())

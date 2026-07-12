@@ -26,7 +26,6 @@ LinearMover::~LinearMover()
 
 void LinearMover::update(const Vector3f& move, const Collider& collision_check)
 {
-  Vector3f target_pos = pos + move;
   Vector3f step_vector = move;
 
   // Static cast to stop warning
