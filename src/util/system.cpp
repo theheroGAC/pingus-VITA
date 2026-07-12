@@ -9,7 +9,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-#include <format>
+#include <sstream>
 #include "util/system.hpp"
 
 #include <algorithm>
@@ -23,6 +23,10 @@
 
 #ifdef __WII__
 #  include "util/wii.hpp"
+#endif
+
+#ifdef __VITA__
+#  include "util/vita.hpp"
 #endif
 
 #ifndef WIN32
@@ -109,7 +113,9 @@ System::opendir(const std::string& pathname, const std::string& pattern)
 
   if (dp == nullptr)
   {
-    throw std::runtime_error(std::format("{}: {}", pathname, strerror(errno)));
+    std::ostringstream ss;
+    ss << pathname << ": " << strerror(errno);
+    throw std::runtime_error(ss.str());
   }
   else
   {
@@ -249,7 +255,8 @@ System::dirname (std::string filename)
 bool
 System::exist(std::string filename)
 {
-  return !access(filename.c_str(), F_OK);
+  std::error_code ec;
+  return std::filesystem::exists(filename, ec);
 }
 
 void
@@ -272,7 +279,11 @@ System::create_dir(std::string directory)
     // Only throw if the error code indicates a real failure
     else if (ec)
     {
-      throw std::runtime_error(std::format("System::create_dir: {}: {}", path.string(), ec.message()));
+      {
+        std::ostringstream ss;
+        ss << "System::create_dir: " << path.string() << ": " << ec.message();
+        throw std::runtime_error(ss.str());
+      }
     }
   }
 }
@@ -284,6 +295,9 @@ System::find_userdir()
   // On Wii, user directory is in the same location as the data directory
   // Store saves, config, etc. in the base Pingus directory
   return Wii::get_base_dir();
+#elif defined(__VITA__)
+  // On Vita, user-writable data goes to the memory card
+  return Vita::get_base_dir();
 #elif defined(WIN32)
   std::string tmpstr;
   char* appdata  = getenv("APPDATA");
@@ -693,18 +707,22 @@ System::write_file(const std::string& filename, const std::string& content)
 {
   log_debug("writing {}", filename);
 
-#if defined(WIN32) || defined(__WII__)
-  // Simple implementation for Windows and Wii
-  // Wii's FAT library doesn't support atomic file operations like mkstemp
+#if defined(WIN32) || defined(__WII__) || defined(__VITA__)
+  // Simple implementation for Windows, Wii and Vita
+  // FAT/Vita filesystem doesn't support atomic file operations like mkstemp
   std::ofstream out(filename, std::ios::binary | std::ios::trunc);
   if (!out)
   {
-    throw std::runtime_error(std::format("{}: failed to open for writing", filename));
+    std::ostringstream ss;
+    ss << filename << ": failed to open for writing";
+    throw std::runtime_error(ss.str());
   }
   out.write(content.data(), content.size());
   if (!out)
   {
-    throw std::runtime_error(std::format("{}: write failed", filename));
+    std::ostringstream ss;
+    ss << filename << ": write failed";
+    throw std::runtime_error(ss.str());
   }
 #else
   // build the filename: "/home/foo/outfile.pngXXXXXX"
@@ -718,31 +736,51 @@ System::write_file(const std::string& filename, const std::string& content)
   umask(old_mask);
   if (fd < 0)
   {
-    throw std::runtime_error(std::format("{}: {}", tmpfile.get(), strerror(errno)));
+    {
+      std::ostringstream ss;
+      ss << tmpfile.get() << ": " << strerror(errno);
+      throw std::runtime_error(ss.str());
+    }
   }
 
   // write the data to the temporary file
   if (write(fd, content.data(), content.size()) < 0)
   {
-    throw std::runtime_error(std::format("{}: {}", tmpfile.get(), strerror(errno)));
+    {
+      std::ostringstream ss;
+      ss << tmpfile.get() << ": " << strerror(errno);
+      throw std::runtime_error(ss.str());
+    }
   }
 
   if (close(fd) < 0)
   {
-    throw std::runtime_error(std::format("{}: {}", tmpfile.get(), strerror(errno)));
+    {
+      std::ostringstream ss;
+      ss << tmpfile.get() << ": " << strerror(errno);
+      throw std::runtime_error(ss.str());
+    }
   }
 
   // rename the temporary file to it's final location
   if (rename(tmpfile.get(), filename.c_str()) < 0)
   {
-    throw std::runtime_error(std::format("{}: {}", tmpfile.get(), strerror(errno)));
+    {
+      std::ostringstream ss;
+      ss << tmpfile.get() << ": " << strerror(errno);
+      throw std::runtime_error(ss.str());
+    }
   }
 
   // adjust permissions to normal default permissions, as mkstemp
   // might not honor umask
   if (chmod(filename.c_str(), ~old_mask & 0666) < 0)
   {
-    throw std::runtime_error(std::format("{}: {}", tmpfile.get(), strerror(errno)));
+    {
+      std::ostringstream ss;
+      ss << tmpfile.get() << ": " << strerror(errno);
+      throw std::runtime_error(ss.str());
+    }
   }
 #endif
 }

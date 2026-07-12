@@ -24,7 +24,7 @@
 //   Magnus Norddahl
 //   (if your name is missing here, please add it)
 
-#include <format>
+#include <sstream>
 #include "util/command_line_generic.hpp"
 
 #include <iomanip>
@@ -106,7 +106,9 @@ void CommandLine_Generic::parse_args(int argc, char** argv)
               {
                 if (i == argc - 1)
                 {
-                  throw std::runtime_error(std::format("option '{}' requires an argument", std::string(argv[i])));
+                  std::ostringstream ss;
+                  ss << "option '" << std::string(argv[i]) << "' requires an argument";
+                  throw std::runtime_error(ss.str());
                 }
                 else
                 {
@@ -118,7 +120,9 @@ void CommandLine_Generic::parse_args(int argc, char** argv)
           }
           else
           {
-            throw std::runtime_error(std::format("unrecognized option '{}'", std::string(argv[i])));
+            std::ostringstream ss;
+            ss << "unrecognized option '" << std::string(argv[i]) << "'";
+            throw std::runtime_error(ss.str());
           }
         }
       }
@@ -146,7 +150,9 @@ void CommandLine_Generic::parse_args(int argc, char** argv)
                 if (i == argc - 1 || *(p+1) != '\0')
                 {
                   // No more arguments
-                  throw std::runtime_error(std::format("option requires an argument -- {}", std::string(1, *p)));
+                  std::ostringstream ss;
+                  ss << "option requires an argument -- " << std::string(1, *p);
+                  throw std::runtime_error(ss.str());
                 }
                 else
                 {
@@ -157,7 +163,9 @@ void CommandLine_Generic::parse_args(int argc, char** argv)
             }
             else
             {
-              throw std::runtime_error(std::format("invalid option -- {}", std::string(1, *p)));
+              std::ostringstream ss;
+              ss << "invalid option -- " << std::string(1, *p);
+              throw std::runtime_error(ss.str());
             }
             ++p;
           }

@@ -14,7 +14,6 @@
 
 #include <sstream>
 #include <string>
-#include <format>
 #include <type_traits>
 
 namespace pingus {
@@ -58,7 +57,9 @@ public:
     }
     else
     {
-      return std::format("{}", t);
+      std::ostringstream ss;
+      ss << t;
+      return ss.str();
     }
   }
 
