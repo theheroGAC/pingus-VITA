@@ -24,6 +24,7 @@
 #include "pingus/fonts.hpp"
 #include "util/log.hpp"
 #include "util/system.hpp"
+#include "util/i18n.hpp"
 
 namespace pingus {
 
@@ -108,7 +109,14 @@ OptionMenu::OptionMenu() :
     resolution_box->set_current_choice(choice);
   }
 
+  // On Wii/Vita, only vitaGL/OpenGX is available, no need to show renderer choice
   ChoiceBox* renderer_box = new ChoiceBox(Rect());
+#if defined(__WII__) || defined(__VITA__)
+  // Wii/Vita uses OpenGL (OpenGX/vitaGL), no other options available
+  renderer_box->add_choice("vitagl");
+  renderer_box->set_current_choice(0);
+#else
+  // Desktop platforms can choose between SDL and OpenGL
   renderer_box->add_choice("sdl");
 #ifdef HAVE_OPENGL
   renderer_box->add_choice("opengl");
@@ -125,10 +133,24 @@ OptionMenu::OptionMenu() :
       renderer_box->set_current_choice(0);
       break;
   }
+#endif
 
   ChoiceBox* scroll_box = new ChoiceBox(Rect());
   scroll_box->add_choice("Drag&Drop");
   scroll_box->add_choice("Rubberband");
+
+  ChoiceBox* language_box = new ChoiceBox(Rect());
+  {
+    std::vector<std::string> languages = i18n::get_available_languages();
+    int current_language_choice = 0;
+    for (size_t i = 0; i < languages.size(); ++i) {
+      language_box->add_choice(languages[i]);
+      if (languages[i] == config_manager.get_language()) {
+        current_language_choice = static_cast<int>(i);
+      }
+    }
+    language_box->set_current_choice(current_language_choice);
+  }
 
   software_cursor_box = new CheckBox(Rect());
   fullscreen_box      = new CheckBox(Rect());
@@ -158,6 +180,7 @@ OptionMenu::OptionMenu() :
 
   resolution_box->on_change = std::bind(&OptionMenu::on_resolution_change, this, std::placeholders::_1);
   renderer_box->on_change = std::bind(&OptionMenu::on_renderer_change, this, std::placeholders::_1);
+  language_box->on_change = std::bind(&OptionMenu::on_language_change, this, std::placeholders::_1);
 
   x_pos = 0;
   y_pos = 0;
@@ -174,6 +197,7 @@ OptionMenu::OptionMenu() :
   y_pos = 0;
   add_item("Resolution:",    std::unique_ptr<gui::RectComponent>(resolution_box));
   add_item("Renderer:",      std::unique_ptr<gui::RectComponent>(renderer_box));
+  add_item("Language:",      std::unique_ptr<gui::RectComponent>(language_box));
   y_pos += 1;
   add_item("Master Volume:", std::unique_ptr<gui::RectComponent>(master_volume_box));
   add_item("Sound Volume:", std::unique_ptr<gui::RectComponent>(sound_volume_box));
@@ -245,12 +269,13 @@ OptionMenu::add_item(const std::string& label, std::unique_ptr<gui::RectComponen
     assert(!"Unhandled control type");
   }
 
-#ifdef __WII__
-  // Disable specific options for Wii to lock them
+#if defined(__WII__) || defined(__VITA__)
+  // Disable specific options for Wii/Vita to lock them
   if (label == "Fullscreen" ||
       label == "Mouse Grab" ||
       label == "Software Cursor" ||
-      label == "Resolution:")
+      label == "Resolution:" ||
+      label == "Renderer:")
   {
       control->set_enabled(false);
       // FIXME: Should grey text for disabled options
@@ -271,6 +296,7 @@ OptionMenu::~OptionMenu()
   config_manager.on_software_cursor_change = nullptr;
   config_manager.on_auto_scrolling_change = nullptr;
   config_manager.on_drag_drop_scrolling_change = nullptr;
+  config_manager.on_language_change = nullptr;
 }
 
 struct OptionEntry {
@@ -428,6 +454,11 @@ OptionMenu::on_renderer_change(const std::string& str)
   config_manager.set_renderer(framebuffer_type_from_string(str));
 }
 
+void
+OptionMenu::on_language_change(const std::string& str)
+{
+  config_manager.set_language(str);
+}
 
 } // namespace pingus
 

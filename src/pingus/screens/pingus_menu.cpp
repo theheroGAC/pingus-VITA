@@ -66,8 +66,14 @@ PingusMenu::PingusMenu() :
   create_background(Size(Display::get_width(), Display::get_height()));
   layout_buttons(Size(Display::get_width(), Display::get_height()));
 
+#if defined(__WII__)
+  help = "..:: A: Select :: B: Back :: D-Pad: Scroll :: HOME: Exit ::..";
+#elif defined(__VITA__)
+  help = "..:: L-Stick: Cursor :: Cross: Select :: Circle: Back :: D-Pad: Scroll ::..";
+#else
   help = "..:: Ctrl-g: mouse grab   ::   F10: fps counter   ::   F11: "
          "fullscreen   ::   F12: screenshot ::..";
+#endif
 
   sound::PingusSound::play_music("pingus-1.it");
 }

@@ -11,7 +11,7 @@
 
 #include "pingus/screens/level_menu.hpp"
 
-#include <format>
+#include <sstream>
 #include <functional>
 
 #include "engine/display/display.hpp"
@@ -183,8 +183,16 @@ public:
       gc.print_left(fonts::chalk_normal, Vector2i(list_rect.left + 105, 15 + y), levelset->get_title());
       gc.print_left(fonts::chalk_small,  Vector2i(list_rect.left + 105, 40 + y), levelset->get_description());
 
-      gc.print_right(fonts::chalk_normal, Vector2i(list_rect.right, 15 + y), std::format("Solved: {}%", levelset->get_completion()));
-      gc.print_right(fonts::chalk_small,  Vector2i(list_rect.right, 40 + y), std::format("{} levels", levelset->get_level_count()));
+      {
+        std::ostringstream ss;
+        ss << "Solved: " << levelset->get_completion() << "%";
+        gc.print_right(fonts::chalk_normal, Vector2i(list_rect.right, 15 + y), ss.str());
+      }
+      {
+        std::ostringstream ss;
+        ss << levelset->get_level_count() << " levels";
+        gc.print_right(fonts::chalk_small,  Vector2i(list_rect.right, 40 + y), ss.str());
+      }
 
       y += item_height;
     }
